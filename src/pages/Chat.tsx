@@ -6,12 +6,15 @@ import {
   Flex,
   Heading,
   HStack,
+  IconButton,
   Stack,
   Text,
   Textarea,
   useBreakpointValue,
 } from '@chakra-ui/react'
 import { env } from '../config/env'
+import { Moon, Sun } from 'lucide-react'
+import { useTheme } from 'next-themes'
 import { openaiClient } from '../service/api/openai'
 import type { OpenAIChatMessage } from '../service/api/openai'
 
@@ -36,10 +39,11 @@ function MessageBubble(props: { message: ChatMessage }) {
     <Flex justify={isUser ? 'flex-end' : 'flex-start'}>
       <Box
         maxW={useBreakpointValue({ base: '90%', md: '70%', lg: '60%' })}
-        bg={isUser ? 'blue.500' : 'gray.100'}
-        color={isUser ? 'white' : 'gray.900'}
         borderRadius="lg"
         p={3}
+        {...(isUser
+          ? { colorPalette: 'blue', bg: 'colorPalette.solid', color: 'colorPalette.contrast' }
+          : { bg: 'bg.subtle', color: 'fg' })}
       >
         <Text whiteSpace="pre-wrap">{message.content}</Text>
       </Box>
@@ -48,6 +52,12 @@ function MessageBubble(props: { message: ChatMessage }) {
 }
 
 export default function ChatPage() {
+  const { resolvedTheme } = useTheme()
+  const darkMode = resolvedTheme === 'dark'
+  const pageBg = darkMode ? '#2e2e2e' : '#f4f4f4'
+  const pageFg = darkMode ? 'white' : 'gray.900'
+  const borderCol = darkMode ? 'gray.600' : 'gray.400'
+  const placeholderCol = darkMode ? 'gray.300' : 'gray.600'
   const [messages, setMessages] = useState<ChatMessage[]>(() => [
     {
       id: generateMessageId(),
@@ -131,6 +141,21 @@ export default function ChatPage() {
     }
   }, [])
 
+  function ColorModeToggle() {
+    const { resolvedTheme, setTheme } = useTheme()
+    const dark = resolvedTheme === 'dark'
+    return (
+      <IconButton
+        aria-label="Toggle color mode"
+        variant="ghost"
+        backgroundColor={dark ? 'black' : 'gray.300'}
+        onClick={() => setTheme(dark ? 'light' : 'dark')}
+      >
+        {dark ? <Sun size={18} /> : <Moon size={18} />}
+      </IconButton>
+    )
+  }
+
   function handleKeyDown(event: React.KeyboardEvent<HTMLTextAreaElement>) {
     if (event.key === 'Enter' && !event.shiftKey) {
       event.preventDefault()
@@ -139,13 +164,16 @@ export default function ChatPage() {
   }
 
   return (
-    <Box minH="100dvh" display="flex" flexDirection="column" bg="gray.50" color="gray.900">
-      <Box borderBottomWidth="1px" bg="white">
+    <Box minH="100dvh" display="flex" flexDirection="column" bg={pageBg} color={pageFg}>
+      <Box borderBottomWidth="1px" bg={pageBg}>
         <Container maxW="4xl" py={4}>
-          <Stack gap={1}>
-            <Heading size="md">{env.appName}</Heading>
-            <Text color="gray.600" fontSize="sm">Chat-style interface to help manage and track your expenses.</Text>
-          </Stack>
+          <HStack justify="space-between" align="center">
+            <Stack gap={1}>
+              <Heading size="md">{env.appName}</Heading>
+              <Text color="fg.muted" fontSize="sm">Chat-style interface to help manage and track your expenses.</Text>
+            </Stack>
+            <ColorModeToggle />
+          </HStack>
         </Container>
       </Box>
 
@@ -159,7 +187,7 @@ export default function ChatPage() {
         </Container>
       </Box>
 
-      <Box borderTopWidth="1px" bg="white" position="sticky" bottom={0}>
+      <Box borderTopWidth="1px" bg={pageBg} position="sticky" bottom={0}>
         <Container maxW="4xl" py={4}>
           <Stack gap={3}>
             <Textarea
@@ -170,17 +198,18 @@ export default function ChatPage() {
               resize="none"
               rows={3}
               disabled={isSending}
-              bg="white"
-              color="gray.900"
-              borderColor="gray.300"
-              _placeholder={{ color: 'gray.500' }}
+              bg={pageBg}
+              color={pageFg}
+              borderColor={borderCol}
+              _placeholder={{ color: placeholderCol }}
               shadow="sm"
             />
 
             <HStack justify="flex-end">
               <Button
                 onClick={() => void handleSend()}
-                colorScheme="blue"
+                backgroundColor={darkMode ? 'black' : 'gray.300'}
+                color={darkMode ? 'white' : 'black'}
                 disabled={!canSend}
               >
                 Send
