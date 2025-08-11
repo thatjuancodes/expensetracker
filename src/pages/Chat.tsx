@@ -22,7 +22,7 @@ import { env } from '../config/env'
 import { Moon, Sun, Menu as MenuIcon, ChevronsLeft, ChevronsRight, Edit2, Trash2, MoreVertical } from 'lucide-react'
 import { useTheme } from 'next-themes'
 import { openaiClient } from '../service/api/openai'
-import type { OpenAIChatMessage } from '../service/api/openai'
+import type { OpenAIChatMessage, OpenAIContentPart } from '../service/api/openai'
 
 type ChatRole = 'user' | 'assistant'
 
@@ -30,6 +30,7 @@ interface ChatMessage {
   id: string
   role: ChatRole
   content: string
+  images?: string[]
 }
 
 interface ChatThread {
@@ -60,6 +61,15 @@ function MessageBubble(props: { message: ChatMessage }) {
           : { bg: 'bg.subtle', color: 'fg' })}
       >
         <Text whiteSpace="pre-wrap">{message.content}</Text>
+        {message.images && message.images.length > 0 && (
+          <HStack gap={2} mt={2} wrap="wrap">
+            {message.images.map((src, idx) => (
+              <Box key={idx} overflow="hidden" borderRadius="md" borderWidth="1px">
+                <img src={src} alt="attachment" style={{ display: 'block', maxWidth: 160, maxHeight: 160, objectFit: 'cover' }} />
+              </Box>
+            ))}
+          </HStack>
+        )}
       </Box>
     </Flex>
   )
@@ -103,6 +113,12 @@ export default function ChatPage() {
   })
 
   const [input, setInput] = useState<string>('')
+  const [images, setImages] = useState<string[]>([])
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
+  const cameraInputRef = useRef<HTMLInputElement | null>(null)
+  const [cameraOpen, setCameraOpen] = useState<boolean>(false)
+  const videoRef = useRef<HTMLVideoElement | null>(null)
+  const streamRef = useRef<MediaStream | null>(null)
 
   const [isSending, setIsSending] = useState<boolean>(false)
 
@@ -152,6 +168,68 @@ export default function ChatPage() {
     setInput('')
     setIsSending(false)
     setSidebarOpen(false)
+  }
+
+  function onSelectImages(files: FileList | null) {
+    if (!files || files.length === 0) return
+    const tasks: Array<Promise<string>> = []
+    Array.from(files).forEach((file) => {
+      tasks.push(
+        new Promise((resolve) => {
+          const reader = new FileReader()
+          reader.onload = () => resolve(reader.result as string)
+          reader.readAsDataURL(file)
+        }),
+      )
+    })
+    Promise.all(tasks).then((dataUris) => setImages((prev) => [...prev, ...dataUris]))
+  }
+
+  function clearImages() {
+    setImages([])
+  }
+
+  async function openCamera() {
+    try {
+      if (!navigator.mediaDevices?.getUserMedia) {
+        window.alert('Camera not supported in this browser')
+        return
+      }
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
+      streamRef.current = stream
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream
+        // Some browsers require play() to be called after setting srcObject
+        await videoRef.current.play().catch(() => {})
+      }
+      setCameraOpen(true)
+    } catch (err) {
+      window.alert('Unable to access camera. Please check permissions.')
+    }
+  }
+
+  function closeCamera() {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((t) => t.stop())
+      streamRef.current = null
+    }
+    setCameraOpen(false)
+  }
+
+  async function capturePhoto() {
+    const video = videoRef.current
+    if (!video) return
+    const width = video.videoWidth || 640
+    const height = video.videoHeight || 480
+    const canvas = document.createElement('canvas')
+    canvas.width = width
+    canvas.height = height
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+    ctx.drawImage(video, 0, 0, width, height)
+    const dataUrl = canvas.toDataURL('image/jpeg', 0.9)
+    setImages((prev) => [...prev, dataUrl])
+    closeCamera()
   }
 
   function renameThread(threadId: string) {
@@ -204,9 +282,11 @@ export default function ChatPage() {
       id: generateMessageId(),
       role: 'user',
       content: input.trim(),
+      images: images.length > 0 ? images : undefined,
     }
 
     setInput('')
+    setImages([])
 
     setThreads((prev) =>
       prev.map((t) =>
@@ -244,7 +324,20 @@ export default function ChatPage() {
         )
       } else {
         // Stream response from OpenAI
-        const history: OpenAIChatMessage[] = messages.map((m) => ({ role: m.role, content: m.content }))
+        const history: OpenAIChatMessage[] = messages.map((m) => {
+          if (m.images && m.images.length > 0) {
+            const content: OpenAIContentPart[] = [
+              { type: 'text', text: m.content },
+              ...m.images.map((url) => ({ type: 'image_url', image_url: { url } } as const)),
+            ]
+            return { role: m.role, content }
+          }
+          return { role: m.role, content: m.content }
+        })
+        const userContentParts: OpenAIContentPart[] = [
+          { type: 'text', text: userMessage.content },
+          ...((userMessage.images ?? []).map((url) => ({ type: 'image_url', image_url: { url } } as const))),
+        ]
         const pendingAssistantId = generateMessageId()
         setThreads((prev) =>
           prev.map((t) =>
@@ -262,7 +355,7 @@ export default function ChatPage() {
         abortRef.current?.abort()
         abortRef.current = new AbortController()
         for await (const delta of openaiClient.streamChat(
-          [...history, { role: 'user', content: userMessage.content }],
+          [...history, { role: 'user', content: userContentParts }],
           { model: env.openaiModel, signal: abortRef.current.signal },
         )) {
           accumulated += delta
@@ -305,6 +398,11 @@ export default function ChatPage() {
   useEffect(() => {
     return () => {
       abortRef.current?.abort()
+      // Ensure camera stream is closed on unmount
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((t) => t.stop())
+        streamRef.current = null
+      }
     }
   }, [])
 
@@ -513,6 +611,26 @@ export default function ChatPage() {
 
       {/* Main content */}
       <Flex direction="column" flex="1">
+        {cameraOpen && (
+          <Box position="fixed" inset={0} zIndex={20}>
+            <Box position="absolute" inset={0} bg="blackAlpha.700" onClick={closeCamera} />
+            <Flex position="absolute" inset={0} align="center" justify="center">
+              <Box bg={darkMode ? '#1f1f1f' : '#ffffff'} p={4} borderRadius="md" borderWidth="1px" maxW="sm" w="full">
+                <Box overflow="hidden" borderRadius="md">
+                  <video ref={videoRef} autoPlay playsInline muted style={{ width: '100%', height: 'auto' }} />
+                </Box>
+                <HStack justify="flex-end" mt={3}>
+                  <Button onClick={closeCamera} backgroundColor={darkMode ? 'gray.700' : 'gray.300'} color={darkMode ? 'white' : 'black'}>
+                    Cancel
+                  </Button>
+                  <Button onClick={() => void capturePhoto()} backgroundColor={darkMode ? 'black' : 'gray.300'} color={darkMode ? 'white' : 'black'}>
+                    Capture
+                  </Button>
+                </HStack>
+              </Box>
+            </Flex>
+          </Box>
+        )}
         <Box borderBottomWidth="1px" bg={pageBg}>
           <Container maxW="4xl" py={4}>
             <HStack justify="space-between" align="center">
@@ -551,6 +669,18 @@ export default function ChatPage() {
         <Box borderTopWidth="1px" bg={pageBg} position="sticky" bottom={0}>
           <Container maxW="4xl" py={4}>
             <Stack gap={3}>
+            {images.length > 0 && (
+              <HStack gap={2} wrap="wrap">
+                {images.map((src, idx) => (
+                  <Box key={idx} position="relative" borderWidth="1px" borderRadius="md" overflow="hidden">
+                    <img src={src} alt="selected" style={{ display: 'block', width: 96, height: 96, objectFit: 'cover' }} />
+                  </Box>
+                ))}
+                <Button onClick={clearImages} backgroundColor={darkMode ? 'gray.700' : 'gray.300'} color={darkMode ? 'white' : 'black'}>
+                  Clear attachments
+                </Button>
+              </HStack>
+            )}
               <Textarea
                 placeholder="How can I help you today?"
                 value={input}
@@ -565,16 +695,48 @@ export default function ChatPage() {
                 _placeholder={{ color: placeholderCol }}
                 shadow="sm"
               />
-              <HStack justify="flex-end">
+            <HStack justify="space-between">
+              <HStack>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  style={{ display: 'none' }}
+                  onChange={(e) => onSelectImages(e.currentTarget.files)}
+                />
+                <input
+                  ref={cameraInputRef}
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  style={{ display: 'none' }}
+                  onChange={(e) => onSelectImages(e.currentTarget.files)}
+                />
                 <Button
-                  onClick={() => void handleSend()}
-                  backgroundColor={darkMode ? 'black' : 'gray.300'}
+                  onClick={() => fileInputRef.current?.click()}
+                  backgroundColor={darkMode ? 'gray.700' : 'gray.300'}
                   color={darkMode ? 'white' : 'black'}
-                  disabled={!canSend}
                 >
-                  Send
+                  Choose Image
+                </Button>
+                <Button
+                  onClick={() => void openCamera()}
+                  backgroundColor={darkMode ? 'gray.700' : 'gray.300'}
+                  color={darkMode ? 'white' : 'black'}
+                >
+                  Take Photo
                 </Button>
               </HStack>
+              <Button
+                onClick={() => void handleSend()}
+                backgroundColor={darkMode ? 'black' : 'gray.300'}
+                color={darkMode ? 'white' : 'black'}
+                disabled={!canSend}
+              >
+                Send
+              </Button>
+            </HStack>
             </Stack>
           </Container>
         </Box>

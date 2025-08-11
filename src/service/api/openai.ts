@@ -1,8 +1,12 @@
 export type OpenAIChatRole = 'system' | 'user' | 'assistant'
 
+export type OpenAIContentPart =
+  | { type: 'text'; text: string }
+  | { type: 'image_url'; image_url: { url: string } }
+
 export interface OpenAIChatMessage {
   role: OpenAIChatRole
-  content: string
+  content: string | OpenAIContentPart[]
 }
 
 export interface OpenAIChatCompletionOptions {
