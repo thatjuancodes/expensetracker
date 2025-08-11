@@ -1,4 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
+import remarkBreaks from 'remark-breaks'
 import {
   Box,
   Button,
@@ -22,6 +25,7 @@ import { env } from '../config/env'
 import { Moon, Sun, Menu as MenuIcon, ChevronsLeft, ChevronsRight, Edit2, Trash2, MoreVertical } from 'lucide-react'
 import { useTheme } from 'next-themes'
 import { openaiClient } from '../service/api/openai'
+import { n8nClient } from '../service/api/n8n'
 import type { OpenAIChatMessage, OpenAIContentPart } from '../service/api/openai'
 
 type ChatRole = 'user' | 'assistant'
@@ -60,7 +64,28 @@ function MessageBubble(props: { message: ChatMessage }) {
           ? { colorPalette: 'blue', bg: 'colorPalette.solid', color: 'colorPalette.contrast' }
           : { bg: 'bg.subtle', color: 'fg' })}
       >
-        <Text whiteSpace="pre-wrap">{message.content}</Text>
+        {isUser ? (
+          <Text whiteSpace="pre-wrap">{message.content}</Text>
+        ) : (
+          <Box>
+            <ReactMarkdown
+              remarkPlugins={[remarkGfm, remarkBreaks]}
+              skipHtml
+              components={{
+                a: ({ node, ...props }) => (
+                  <a {...props} target="_blank" rel="noopener noreferrer" />
+                ),
+                img: ({ node, ...props }) => (
+                  // Prevent referrer leakage and lazy-load images
+                  // eslint-disable-next-line jsx-a11y/alt-text
+                  <img {...props} referrerPolicy="no-referrer" loading="lazy" />
+                ),
+              }}
+            >
+              {message.content}
+            </ReactMarkdown>
+          </Box>
+        )}
         {message.images && message.images.length > 0 && (
           <HStack gap={2} mt={2} wrap="wrap">
             {message.images.map((src, idx) => (
@@ -129,13 +154,43 @@ export default function ChatPage() {
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(false)
 
+  function extractN8nText(payload: unknown): string {
+    // Handle array of items: [{ output: string }] or [{ json: { output: string } }]
+    if (Array.isArray(payload)) {
+      const first = payload[0] as unknown
+      if (first && typeof first === 'object') {
+        const obj = first as Record<string, unknown>
+        const nested = (obj.output ?? (obj.json as Record<string, unknown> | undefined)?.output)
+        if (typeof nested === 'string') return nested
+      }
+    }
+    // Handle object forms
+    if (payload && typeof payload === 'object') {
+      const obj = payload as Record<string, unknown>
+      if (typeof obj.output === 'string') return obj.output
+      if (typeof obj.message === 'string') return obj.message
+      const agent = obj.agent_output as unknown
+      if (agent && typeof agent === 'object') {
+        const ao = agent as Record<string, unknown>
+        if (typeof ao.output === 'string') return ao.output
+      } else if (typeof agent === 'string') {
+        return agent
+      }
+    }
+    // Fallback
+    return typeof payload === 'string' ? payload : JSON.stringify(payload, null, 2)
+  }
+
   const currentThread = useMemo(
     () => threads.find((t) => t.id === (currentThreadId || threads[0]?.id)) ?? threads[0],
     [threads, currentThreadId],
   )
   const messages = currentThread?.messages ?? []
 
-  const canSend = useMemo(() => input.trim().length > 0 && !isSending, [input, isSending])
+  const canSend = useMemo(
+    () => (input.trim().length > 0 || images.length > 0) && !isSending,
+    [input, images.length, isSending],
+  )
 
   useEffect(() => {
     // Persist threads & selection
@@ -307,6 +362,29 @@ export default function ChatPage() {
     setIsSending(true)
 
     try {
+      const isImageOnly = userMessage.content.trim().length === 0 && (userMessage.images?.length ?? 0) > 0
+      if (isImageOnly) {
+        // Upload the first image to n8n as multipart/form-data
+        const firstImage = userMessage.images![0]
+        const blob = await (await fetch(firstImage)).blob()
+        const response = await n8nClient.uploadReceipt<unknown>(blob, { filename: 'receipt.jpg' })
+
+        const assistantMessage: ChatMessage = {
+          id: generateMessageId(),
+          role: 'assistant',
+          content: extractN8nText(response),
+        }
+
+        setThreads((prev) =>
+          prev.map((t) =>
+            t.id === currentThread.id
+              ? { ...t, messages: [...t.messages, assistantMessage], updatedAt: Date.now() }
+              : t,
+          ),
+        )
+        return
+      }
+
       if (!env.useOpenAI) {
         const assistantMessage: ChatMessage = {
           id: generateMessageId(),

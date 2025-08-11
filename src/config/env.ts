@@ -7,6 +7,7 @@ interface PublicEnv {
   openaiApiKey?: string
   useOpenAI: boolean
   openaiModel: string
+  n8nUploadUrl: string
 }
 
 function readString(name: string, fallback?: string): string {
@@ -31,5 +32,7 @@ export const env: PublicEnv = {
   openaiApiKey: readString('VITE_OPENAI_API_KEY'),
   useOpenAI: readString('VITE_USE_OPENAI', 'false').toLowerCase() === 'true',
   openaiModel: readString('VITE_OPENAI_MODEL', 'gpt-5'),
+  // Intentionally no default to avoid exposing any URL in the codebase
+  n8nUploadUrl: readString('VITE_N8N_UPLOAD_URL'),
 }
 
