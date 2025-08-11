@@ -1,0 +1,32 @@
+# UI and React Component Conventions
+
+- Buttons background color
+  - Always set button background via the `backgroundColor` prop.
+  - Also set readable text color via the `color` prop as needed for contrast.
+  - For interactive states, prefer `_hover={{ backgroundColor: ... }}` and `_active={{ backgroundColor: ... }}`.
+  - Prefer semantic tokens or design tokens when available; avoid hard-coding unless explicitly specified by the design.
+  - Do not rely on `colorScheme` to define button background color.
+
+- React components (no React.FC)
+  - Do not use `React.FC` (or `React.FunctionComponent`).
+  - Use standard function components with typed or inferred props.
+    - Example:
+      ```tsx
+      type Props = { label: string }
+      export function ExampleButton({ label }: Props) {
+        return <button>{label}</button>
+      }
+      ```
+    - Or with an arrow function (without `React.FC`):
+      ```tsx
+      type Props = { label: string }
+      export const ExampleButton = ({ label }: Props) => {
+        return <button>{label}</button>
+      }
+      ```
+
+- Light/Dark toggle and icon buttons
+  - Icon-like buttons (toggles, menu, expand/collapse) must reflect the current theme.
+  - In light mode use a light background (e.g., `gray.300`) and dark text/icon (`black`).
+  - In dark mode use a dark background (`black`) and light text/icon (`white`).
+  - Apply the same pattern consistently across all toggles and sidebar controls.
