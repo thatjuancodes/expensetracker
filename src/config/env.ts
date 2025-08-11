@@ -5,6 +5,8 @@ interface PublicEnv {
   appEnv: AppEnv
   // Note: Do not expose real secrets in client-side code. Kept optional for local demos only.
   openaiApiKey?: string
+  useOpenAI: boolean
+  openaiModel: string
 }
 
 function readString(name: string, fallback?: string): string {
@@ -27,5 +29,7 @@ export const env: PublicEnv = {
   appName: readString('VITE_APP_NAME', 'Expense Tracker'),
   appEnv: readAppEnv(),
   openaiApiKey: readString('VITE_OPENAI_API_KEY'),
+  useOpenAI: readString('VITE_USE_OPENAI', 'false').toLowerCase() === 'true',
+  openaiModel: readString('VITE_OPENAI_MODEL', 'gpt-5'),
 }
 

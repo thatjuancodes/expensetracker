@@ -52,11 +52,19 @@ Available keys:
 VITE_APP_NAME=Expense Tracker
 VITE_APP_ENV=development
 # VITE_OPENAI_API_KEY=
+VITE_USE_OPENAI=false
+VITE_OPENAI_MODEL=gpt-5
 ```
 
 Notes:
 - Do not use real secrets in client env; prefer a backend proxy.
 - `.env`, `.env.*` are ignored by git (see `.gitignore`), while `.env.example` remains tracked.
+
+To enable OpenAI in the UI, set:
+```
+VITE_USE_OPENAI=true
+VITE_OPENAI_API_KEY=sk-...
+```
 
 ### Connecting to OpenAI (later)
 Replace the placeholder assistant message inside `handleSend` in `src/pages/Chat.tsx` with your API call.

@@ -12,6 +12,8 @@ import {
   useBreakpointValue,
 } from '@chakra-ui/react'
 import { env } from '../config/env'
+import { openaiClient } from '../service/api/openai'
+import type { OpenAIChatMessage } from '../service/api/openai'
 
 type ChatRole = 'user' | 'assistant'
 
@@ -59,6 +61,7 @@ export default function ChatPage() {
   const [isSending, setIsSending] = useState<boolean>(false)
 
   const scrollRef = useRef<HTMLDivElement | null>(null)
+  const abortRef = useRef<AbortController | null>(null)
 
   const canSend = useMemo(() => input.trim().length > 0 && !isSending, [input, isSending])
 
@@ -83,22 +86,50 @@ export default function ChatPage() {
     setIsSending(true)
 
     try {
-      // Placeholder assistant response. Replace with OpenAI API call later.
-      const assistantMessage: ChatMessage = {
-        id: generateMessageId(),
-        role: 'assistant',
-        content:
-          "Thanks! I'm a placeholder for now. You can wire me up to OpenAI later.",
+      if (!env.useOpenAI) {
+        const assistantMessage: ChatMessage = {
+          id: generateMessageId(),
+          role: 'assistant',
+          content:
+            "Thanks! I'm a placeholder for now. Set VITE_USE_OPENAI=true and add VITE_OPENAI_API_KEY to use OpenAI.",
+        }
+        await new Promise((resolve) => setTimeout(resolve, 300))
+        setMessages((prev) => [...prev, assistantMessage])
+      } else {
+        // Stream response from OpenAI
+        const history: OpenAIChatMessage[] = messages.map((m) => ({ role: m.role, content: m.content }))
+        const pendingAssistantId = generateMessageId()
+        setMessages((prev) => [...prev, { id: pendingAssistantId, role: 'assistant', content: '' }])
+
+        let accumulated = ''
+        abortRef.current?.abort()
+        abortRef.current = new AbortController()
+        for await (const delta of openaiClient.streamChat(
+          [...history, { role: 'user', content: userMessage.content }],
+          { model: env.openaiModel, signal: abortRef.current.signal },
+        )) {
+          accumulated += delta
+          setMessages((prev) =>
+            prev.map((m) => (m.id === pendingAssistantId ? { ...m, content: accumulated } : m)),
+          )
+        }
       }
-
-      // Simulate latency
-      await new Promise((resolve) => setTimeout(resolve, 500))
-
-      setMessages((prev) => [...prev, assistantMessage])
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Unknown error'
+      setMessages((prev) => [
+        ...prev,
+        { id: generateMessageId(), role: 'assistant', content: `Error: ${message}` },
+      ])
     } finally {
       setIsSending(false)
     }
   }
+
+  useEffect(() => {
+    return () => {
+      abortRef.current?.abort()
+    }
+  }, [])
 
   function handleKeyDown(event: React.KeyboardEvent<HTMLTextAreaElement>) {
     if (event.key === 'Enter' && !event.shiftKey) {
