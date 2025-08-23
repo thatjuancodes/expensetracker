@@ -463,56 +463,36 @@ export default function ChatPage() {
           ),
         )
       } else {
-        // Stream response from OpenAI
-        const history: OpenAIChatMessage[] = messages.map((m) => {
-          if (m.images && m.images.length > 0) {
-            const content: OpenAIContentPart[] = [
-              { type: 'text', text: m.content },
-              ...m.images.map((url) => ({ type: 'image_url', image_url: { url } } as const)),
-            ]
-            return { role: m.role, content }
-          }
-          return { role: m.role, content: m.content }
+        // Send text-only message to n8n endpoint
+        const response = await fetch('https://homemakr.app.n8n.cloud/webhook-test/prompt', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            messages: [{ role: 'user', content: userMessage.content }],
+          }),
         })
-        const userContentParts: OpenAIContentPart[] = [
-          { type: 'text', text: userMessage.content },
-          ...((userMessage.images ?? []).map((url) => ({ type: 'image_url', image_url: { url } } as const))),
-        ]
-        const pendingAssistantId = generateMessageId()
+
+        if (!response.ok) {
+          throw new Error(`n8n error ${response.status}: ${await response.text()}`)
+        }
+
+        const responseData = await response.json()
+        const content = responseData.output || extractN8nText(responseData)
+        const assistantMessage: ChatMessage = {
+          id: generateMessageId(),
+          role: 'assistant',
+          content,
+        }
+
         setThreads((prev) =>
           prev.map((t) =>
             t.id === currentThread.id
-              ? {
-                  ...t,
-                  messages: [...t.messages, { id: pendingAssistantId, role: 'assistant', content: '' }],
-                  updatedAt: Date.now(),
-                }
+              ? { ...t, messages: [...t.messages, assistantMessage], updatedAt: Date.now() }
               : t,
           ),
         )
-
-        let accumulated = ''
-        abortRef.current?.abort()
-        abortRef.current = new AbortController()
-        for await (const delta of openaiClient.streamChat(
-          [...history, { role: 'user', content: userContentParts }],
-          { model: env.openaiModel, signal: abortRef.current.signal },
-        )) {
-          accumulated += delta
-          setThreads((prev) =>
-            prev.map((t) =>
-              t.id === currentThread.id
-                ? {
-                    ...t,
-                    messages: t.messages.map((m) =>
-                      m.id === pendingAssistantId ? { ...m, content: accumulated } : m,
-                    ),
-                    updatedAt: Date.now(),
-                  }
-                : t,
-            ),
-          )
-        }
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unknown error'
