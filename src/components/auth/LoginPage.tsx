@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Box, Button, VStack, Text, Heading, Spinner } from '@chakra-ui/react'
+import { Box, Button, VStack, Text, Heading, Spinner, useBreakpointValue } from '@chakra-ui/react'
 import { useTheme } from 'next-themes'
 import { useAuth } from '../../contexts/AuthContext'
 
@@ -37,9 +37,10 @@ export default function LoginPage() {
       color={darkMode ? 'white' : 'gray.900'}
     >
       <Box
-        maxW="400px"
+        maxW={useBreakpointValue({ base: '90%', sm: '400px' })}
         w="full"
-        p={8}
+        p={useBreakpointValue({ base: 6, md: 8 })}
+        mx={4}
         borderRadius="lg"
         bg={darkMode ? 'gray.800' : 'white'}
         boxShadow="lg"
@@ -73,8 +74,10 @@ export default function LoginPage() {
             <Button
               onClick={handleGoogleSignIn}
               disabled={loading}
-              size="lg"
+              size={useBreakpointValue({ base: 'md', md: 'lg' })}
               w="full"
+              minH={useBreakpointValue({ base: '48px', md: '56px' })}
+              fontSize={useBreakpointValue({ base: 'md', md: 'lg' })}
               backgroundColor={darkMode ? 'blue.600' : 'blue.500'}
               color="white"
               _hover={{
