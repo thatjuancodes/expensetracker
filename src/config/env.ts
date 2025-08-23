@@ -8,6 +8,9 @@ interface PublicEnv {
   useOpenAI: boolean
   openaiModel: string
   n8nUploadUrl: string
+  // Supabase configuration (these are safe to expose in client-side code)
+  supabaseUrl: string
+  supabaseAnonKey: string
 }
 
 function readString(name: string, fallback?: string): string {
@@ -34,5 +37,8 @@ export const env: PublicEnv = {
   openaiModel: readString('VITE_OPENAI_MODEL', 'gpt-5'),
   // Intentionally no default to avoid exposing any URL in the codebase
   n8nUploadUrl: readString('VITE_N8N_UPLOAD_URL'),
+  // Supabase configuration
+  supabaseUrl: readString('VITE_SUPABASE_URL'),
+  supabaseAnonKey: readString('VITE_SUPABASE_KEY'),
 }
 

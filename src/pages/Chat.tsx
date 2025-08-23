@@ -23,6 +23,7 @@ import {
 } from '@chakra-ui/react'
 import { env } from '../config/env'
 import { Moon, Sun, Menu as MenuIcon, ChevronsLeft, ChevronsRight, Edit2, Trash2, MoreVertical } from 'lucide-react'
+import LogoutButton from '../components/auth/LogoutButton'
 import { useTheme } from 'next-themes'
 import { openaiClient } from '../service/api/openai'
 import { n8nClient } from '../service/api/n8n'
@@ -711,7 +712,7 @@ export default function ChatPage() {
         )}
         <Box borderBottomWidth="1px" bg={pageBg}>
           <Container maxW="4xl" py={4}>
-            <HStack justify="space-between" align="center">
+                          <HStack justify="space-between" align="center">
               <HStack gap={2}>
                 {isMobile && (
                   <IconButton
@@ -729,7 +730,11 @@ export default function ChatPage() {
                   <Text fontSize="sm">Chat-style interface to help manage and track your expenses.</Text>
                 </Stack>
               </HStack>
-              <ColorModeToggle />
+              
+              <HStack gap={2}>
+                <LogoutButton />
+                <ColorModeToggle />
+              </HStack>
             </HStack>
           </Container>
         </Box>
