@@ -22,8 +22,8 @@ import {
   Portal,
 } from '@chakra-ui/react'
 import { env } from '../config/env'
-import { Moon, Sun, Menu as MenuIcon, ChevronsLeft, ChevronsRight, Edit2, Trash2, MoreVertical } from 'lucide-react'
-import LogoutButton from '../components/auth/LogoutButton'
+import { Moon, Sun, Menu as MenuIcon, ChevronsLeft, ChevronsRight, Edit2, Trash2, MoreVertical, Settings, LogOut } from 'lucide-react'
+
 import ResponsiveImage from '../components/ui/ResponsiveImage'
 import { useTheme } from 'next-themes'
 import { openaiClient } from '../service/api/openai'
@@ -109,8 +109,8 @@ function MessageBubble(props: { message: ChatMessage }) {
 }
 
 export default function ChatPage() {
-  const { resolvedTheme } = useTheme()
-  const { session } = useAuth()
+  const { resolvedTheme, setTheme } = useTheme()
+  const { session, signOut } = useAuth()
   const darkMode = resolvedTheme === 'dark'
   const pageBg = darkMode ? '#2e2e2e' : '#f4f4f4'
   const pageFg = darkMode ? 'white' : 'gray.900'
@@ -162,6 +162,26 @@ export default function ChatPage() {
   const isMobile = useBreakpointValue({ base: true, md: false })
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(false)
+  const [accountMenuOpen, setAccountMenuOpen] = useState<boolean>(false)
+  const [isSigningOut, setIsSigningOut] = useState<boolean>(false)
+
+  const handleSignOut = async () => {
+    try {
+      setIsSigningOut(true)
+      setAccountMenuOpen(false)
+      await signOut()
+    } catch (error) {
+      console.error('Error signing out:', error)
+    } finally {
+      setIsSigningOut(false)
+    }
+  }
+
+  const handleThemeToggle = (e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setTheme(darkMode ? 'light' : 'dark')
+  }
 
   function extractN8nText(payload: unknown): string {
     // Handle array of items: [{ output: string }] or [{ json: { output: string } }]
@@ -578,9 +598,24 @@ export default function ChatPage() {
         borderRightWidth="1px"
         bg={darkMode ? '#1f1f1f' : '#ffffff'}
         w={72}
+        h="100vh"
         transition="width 0.2s ease"
         overflowX="hidden"
+        position="fixed"
+        top={0}
+        left={0}
+        zIndex={5}
       >
+        {/* App Title and Description */}
+        <Box p={3} borderBottomWidth="1px" borderColor={borderCol}>
+          <Stack gap={1}>
+            <Heading size="sm" color={pageFg}>{env.appName}</Heading>
+            <Text fontSize="xs" color={darkMode ? 'gray.300' : 'gray.600'}>
+              Chat-style interface to help manage and track your expenses.
+            </Text>
+          </Stack>
+        </Box>
+
         <HStack justify="space-between" p={3} borderBottomWidth="1px">
           <Heading size="sm">Chat History</Heading>
           <IconButton
@@ -605,7 +640,7 @@ export default function ChatPage() {
             New chat
           </Button>
 
-          <Stack gap={1} overflowY="auto" maxH="calc(100dvh - 120px)">
+          <Stack gap={1} overflowY="auto" maxH="calc(100dvh - 240px)">
             {threads.map((t) => {
               const selected = t.id === currentThread?.id
               return (
@@ -635,11 +670,111 @@ export default function ChatPage() {
             })}
           </Stack>
         </Box>
+
+        {/* Account Information Section */}
+        <Box 
+          position="absolute" 
+          bottom={0} 
+          left={0} 
+          right={0} 
+          borderTopWidth="1px" 
+          borderColor={borderCol}
+          p={3}
+          bg={darkMode ? '#1f1f1f' : '#ffffff'}
+        >
+          <MenuRoot
+            open={accountMenuOpen}
+            onOpenChange={(e) => setAccountMenuOpen(e.open)}
+            placement="top-start"
+          >
+            <MenuTrigger asChild>
+              <Box
+                cursor="pointer"
+                _hover={{
+                  backgroundColor: darkMode ? 'gray.700' : 'gray.100',
+                }}
+                borderRadius="md"
+                p={2}
+                mx={-2}
+                transition="background-color 0.2s"
+              >
+                <HStack gap={3} align="center">
+                  <Box flex={1} minW={0}>
+                    <Text 
+                      fontSize="sm" 
+                      fontWeight="medium" 
+                      overflow="hidden" 
+                      textOverflow="ellipsis" 
+                      whiteSpace="nowrap"
+                      color={pageFg}
+                    >
+                      {session?.user?.email || 'No email'}
+                    </Text>
+                  </Box>
+                  <Box 
+                    w={8} 
+                    h={8} 
+                    borderRadius="full" 
+                    backgroundColor={darkMode ? 'gray.300' : 'gray.300'}
+                    display="flex" 
+                    alignItems="center" 
+                    justifyContent="center"
+                  >
+                    <Settings 
+                      size={16} 
+                      color={darkMode ? 'black' : 'black'} 
+                    />
+                  </Box>
+                </HStack>
+              </Box>
+            </MenuTrigger>
+            <Portal>
+              <MenuPositioner>
+                <MenuContent
+                  bg={darkMode ? '#2a2a2a' : '#ffffff'}
+                  borderColor={borderCol}
+                  borderWidth="1px"
+                  borderRadius="md"
+                  minW="200px"
+                  shadow="lg"
+                >
+                  <MenuItem
+                    value="theme"
+                    onPointerDown={handleThemeToggle}
+                    color={darkMode ? 'white' : 'black'}
+                    _hover={{
+                      backgroundColor: darkMode ? 'gray.600' : 'gray.100',
+                    }}
+                  >
+                    <HStack gap={2}>
+                      {darkMode ? <Sun size={16} /> : <Moon size={16} />}
+                      <Text>{darkMode ? 'Light mode' : 'Dark mode'}</Text>
+                    </HStack>
+                  </MenuItem>
+                  <MenuItem
+                    value="signout"
+                    onClick={handleSignOut}
+                    disabled={isSigningOut}
+                    color={darkMode ? 'white' : 'black'}
+                    _hover={{
+                      backgroundColor: darkMode ? 'gray.600' : 'gray.100',
+                    }}
+                  >
+                    <HStack gap={2}>
+                      <LogOut size={16} />
+                      <Text>{isSigningOut ? 'Signing out...' : 'Sign out'}</Text>
+                    </HStack>
+                  </MenuItem>
+                </MenuContent>
+              </MenuPositioner>
+            </Portal>
+          </MenuRoot>
+        </Box>
       </Box>
 
       {/* Mobile sidebar overlay */}
       {isMobile && sidebarOpen && (
-        <Box position="fixed" inset={0} zIndex={10}>
+        <Box position="fixed" inset={0} zIndex={15}>
           <Box position="absolute" inset={0} bg="blackAlpha.600" onClick={() => setSidebarOpen(false)} />
           <Box 
             position="absolute" 
@@ -651,6 +786,16 @@ export default function ChatPage() {
             bg={darkMode ? '#1f1f1f' : '#ffffff'} 
             borderRightWidth="1px"
           >
+            {/* App Title and Description */}
+            <Box p={3} borderBottomWidth="1px" borderColor={borderCol}>
+              <Stack gap={1}>
+                <Heading size="sm" color={pageFg}>{env.appName}</Heading>
+                <Text fontSize="xs" color={darkMode ? 'gray.300' : 'gray.600'}>
+                  Chat-style interface to help manage and track your expenses.
+                </Text>
+              </Stack>
+            </Box>
+
             <HStack justify="space-between" p={3} borderBottomWidth="1px">
               <Heading size="sm">Chat History</Heading>
               <IconButton
@@ -706,12 +851,117 @@ export default function ChatPage() {
                 })}
               </Stack>
             </Box>
+
+            {/* Account Information Section - Mobile */}
+            <Box 
+              position="absolute" 
+              bottom={0} 
+              left={0} 
+              right={0} 
+              borderTopWidth="1px" 
+              borderColor={borderCol}
+              p={3}
+              bg={darkMode ? '#1f1f1f' : '#ffffff'}
+            >
+              <MenuRoot
+                open={accountMenuOpen}
+                onOpenChange={(e) => setAccountMenuOpen(e.open)}
+                placement="top-start"
+              >
+                <MenuTrigger asChild>
+                  <Box
+                    cursor="pointer"
+                    _hover={{
+                      backgroundColor: darkMode ? 'gray.700' : 'gray.100',
+                    }}
+                    borderRadius="md"
+                    p={2}
+                    mx={-2}
+                    transition="background-color 0.2s"
+                  >
+                    <HStack gap={3} align="center">
+                      <Box flex={1} minW={0}>
+                        <Text 
+                          fontSize="sm" 
+                          fontWeight="medium" 
+                          overflow="hidden" 
+                          textOverflow="ellipsis" 
+                          whiteSpace="nowrap"
+                          color={pageFg}
+                        >
+                          {session?.user?.email || 'No email'}
+                        </Text>
+                      </Box>
+                      <Box 
+                        w={8} 
+                        h={8} 
+                        borderRadius="full" 
+                        backgroundColor={darkMode ? 'gray.300' : 'gray.300'}
+                        display="flex" 
+                        alignItems="center" 
+                        justifyContent="center"
+                      >
+                        <Settings 
+                          size={16} 
+                          color={darkMode ? 'black' : 'black'} 
+                        />
+                      </Box>
+                    </HStack>
+                  </Box>
+                </MenuTrigger>
+                <Portal>
+                  <MenuPositioner>
+                    <MenuContent
+                      bg={darkMode ? '#2a2a2a' : '#ffffff'}
+                      borderColor={borderCol}
+                      borderWidth="1px"
+                      borderRadius="md"
+                      minW="200px"
+                      shadow="lg"
+                    >
+                      <MenuItem
+                        value="theme"
+                        onPointerDown={handleThemeToggle}
+                        color={darkMode ? 'white' : 'black'}
+                        _hover={{
+                          backgroundColor: darkMode ? 'gray.600' : 'gray.100',
+                        }}
+                      >
+                        <HStack gap={2}>
+                          {darkMode ? <Sun size={16} /> : <Moon size={16} />}
+                          <Text>{darkMode ? 'Light mode' : 'Dark mode'}</Text>
+                        </HStack>
+                      </MenuItem>
+                      <MenuItem
+                        value="signout"
+                        onClick={handleSignOut}
+                        disabled={isSigningOut}
+                        color={darkMode ? 'white' : 'black'}
+                        _hover={{
+                          backgroundColor: darkMode ? 'gray.600' : 'gray.100',
+                        }}
+                      >
+                        <HStack gap={2}>
+                          <LogOut size={16} />
+                          <Text>{isSigningOut ? 'Signing out...' : 'Sign out'}</Text>
+                        </HStack>
+                      </MenuItem>
+                    </MenuContent>
+                  </MenuPositioner>
+                </Portal>
+              </MenuRoot>
+            </Box>
           </Box>
         </Box>
       )}
 
       {/* Main content */}
-      <Flex direction="column" flex="1">
+      <Flex 
+        direction="column" 
+        flex="1" 
+        ml={{ base: 0, md: sidebarCollapsed ? 0 : 72 }}
+        transition="margin-left 0.2s ease"
+      >
         {cameraOpen && (
           <Box position="fixed" inset={0} zIndex={20}>
             <Box position="absolute" inset={0} bg="blackAlpha.700" onClick={closeCamera} />
@@ -755,20 +1005,11 @@ export default function ChatPage() {
                     <MenuIcon size={18} />
                   </IconButton>
                 )}
-                <Stack gap={1}>
-                  <Heading size={useBreakpointValue({ base: 'sm', md: 'md' })}>{env.appName}</Heading>
-                  <Text 
-                    fontSize={useBreakpointValue({ base: 'xs', md: 'sm' })}
-                    display={useBreakpointValue({ base: 'none', sm: 'block' })}
-                  >
-                    Chat-style interface to help manage and track your expenses.
-                  </Text>
-                </Stack>
+
               </HStack>
               
               <HStack gap={useBreakpointValue({ base: 1, md: 2 })}>
-                <LogoutButton />
-                <ColorModeToggle />
+                {/* Theme toggle moved to account menu */}
               </HStack>
             </HStack>
           </Container>
