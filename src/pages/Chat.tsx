@@ -28,6 +28,7 @@ import { useTheme } from 'next-themes'
 import { openaiClient } from '../service/api/openai'
 import { n8nClient } from '../service/api/n8n'
 import type { OpenAIChatMessage, OpenAIContentPart } from '../service/api/openai'
+import { useAuth } from '../contexts/AuthContext'
 
 type ChatRole = 'user' | 'assistant'
 
@@ -103,6 +104,7 @@ function MessageBubble(props: { message: ChatMessage }) {
 
 export default function ChatPage() {
   const { resolvedTheme } = useTheme()
+  const { session } = useAuth()
   const darkMode = resolvedTheme === 'dark'
   const pageBg = darkMode ? '#2e2e2e' : '#f4f4f4'
   const pageFg = darkMode ? 'white' : 'gray.900'
@@ -368,7 +370,12 @@ export default function ChatPage() {
         // Upload the first image to n8n as multipart/form-data
         const firstImage = userMessage.images![0]
         const blob = await (await fetch(firstImage)).blob()
-        const response = await n8nClient.uploadReceipt<unknown>(blob, { filename: 'receipt.jpg' })
+        const response = await n8nClient.uploadReceipt<unknown>(blob, { 
+          filename: 'receipt.jpg',
+          additionalFields: {
+            userId: session?.user?.id || 'anonymous'
+          }
+        })
 
         const assistantMessage: ChatMessage = {
           id: generateMessageId(),

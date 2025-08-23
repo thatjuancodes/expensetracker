@@ -12,12 +12,14 @@ export interface UploadReceiptOptions {
   signal?: AbortSignal
   fieldName?: string
   filename?: string
+  additionalFields?: Record<string, string>
 }
 
 function createFormDataFromFile(
   file: File | Blob,
   fieldName: string,
   filename?: string,
+  additionalFields?: Record<string, string>,
 ): FormData {
   const formData = new FormData()
   // For Blob without name, browsers require a filename argument
@@ -26,6 +28,14 @@ function createFormDataFromFile(
   } else {
     formData.append(fieldName, file, filename ?? 'upload.jpg')
   }
+  
+  // Add any additional fields to the form data
+  if (additionalFields) {
+    Object.entries(additionalFields).forEach(([key, value]) => {
+      formData.append(key, value)
+    })
+  }
+  
   return formData
 }
 
@@ -40,13 +50,13 @@ export class N8nClient {
     file: File | Blob,
     options: UploadReceiptOptions = {},
   ): Promise<N8nUploadSuccessResponse<T>> {
-    const { signal, fieldName = 'file', filename } = options
+    const { signal, fieldName = 'file', filename, additionalFields } = options
 
     if (!(file instanceof Blob)) {
       throw new Error('uploadReceipt: invalid file provided')
     }
 
-    const formData = createFormDataFromFile(file, fieldName, filename)
+    const formData = createFormDataFromFile(file, fieldName, filename, additionalFields)
 
     if (!this.uploadUrl) {
       throw new Error(
