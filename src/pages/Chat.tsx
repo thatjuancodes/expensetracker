@@ -237,7 +237,7 @@ export default function ChatPage() {
   })
 
   const handleDevModeToggle = () => {
-    setDevMode((prev) => {
+    setDevMode((prev: boolean) => {
       const newValue = !prev
       localStorage.setItem('devMode', JSON.stringify(newValue))
       return newValue

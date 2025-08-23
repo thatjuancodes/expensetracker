@@ -13,6 +13,7 @@ export interface UploadReceiptOptions {
   fieldName?: string
   filename?: string
   additionalFields?: Record<string, string>
+  uploadUrl?: string
 }
 
 function createFormDataFromFile(
@@ -50,7 +51,7 @@ export class N8nClient {
     file: File | Blob,
     options: UploadReceiptOptions = {},
   ): Promise<N8nUploadSuccessResponse<T>> {
-    const { signal, fieldName = 'file', filename, additionalFields } = options
+    const { signal, fieldName = 'file', filename, additionalFields, uploadUrl } = options
 
     if (!(file instanceof Blob)) {
       throw new Error('uploadReceipt: invalid file provided')
@@ -58,13 +59,15 @@ export class N8nClient {
 
     const formData = createFormDataFromFile(file, fieldName, filename, additionalFields)
 
-    if (!this.uploadUrl) {
+    const targetUrl = uploadUrl ?? this.uploadUrl
+
+    if (!targetUrl) {
       throw new Error(
         'Missing n8n upload URL. Set VITE_N8N_UPLOAD_URL or pass a URL to new N8nClient(url).',
       )
     }
 
-    const response = await fetch(this.uploadUrl, {
+    const response = await fetch(targetUrl, {
       method: 'POST',
       body: formData,
       // Do not set Content-Type for multipart; the browser will set the correct boundary
