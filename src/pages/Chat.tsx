@@ -1212,6 +1212,24 @@ export default function ChatPage() {
             </Stack>
           </Container>
         </Box>
+        {devMode && (
+          <Box
+            position="fixed"
+            bottom={4}
+            right={4}
+            zIndex={30}
+            backgroundColor="orange.500"
+            color="white"
+            px={3}
+            py={1}
+            borderRadius="full"
+            borderWidth="1px"
+            borderColor={darkMode ? 'orange.300' : 'orange.600'}
+            shadow="lg"
+          >
+            DEV MODE
+          </Box>
+        )}
       </Flex>
     </Flex>
   )
