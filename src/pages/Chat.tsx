@@ -26,9 +26,7 @@ import { Moon, Sun, Menu as MenuIcon, ChevronsLeft, ChevronsRight, Edit2, Trash2
 
 import ResponsiveImage from '../components/ui/ResponsiveImage'
 import { useTheme } from 'next-themes'
-import { openaiClient } from '../service/api/openai'
 import { n8nClient } from '../service/api/n8n'
-import type { OpenAIChatMessage, OpenAIContentPart } from '../service/api/openai'
 import { useAuth } from '../contexts/AuthContext'
 
 type ChatRole = 'user' | 'assistant'
