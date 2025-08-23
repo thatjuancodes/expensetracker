@@ -52,18 +52,18 @@ function generateMessageId(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
 }
 
-function MessageBubble(props: { message: ChatMessage }) {
-  const { message } = props
+function MessageBubble(props: { message: ChatMessage; messageBubbleMaxW: any; messageBubbleP: any; messageBubbleFontSize: any; imageGap: any }) {
+  const { message, messageBubbleMaxW, messageBubbleP, messageBubbleFontSize, imageGap } = props
 
   const isUser = message.role === 'user'
 
   return (
     <Flex justify={isUser ? 'flex-end' : 'flex-start'}>
       <Box
-        maxW={useBreakpointValue({ base: '95%', sm: '85%', md: '70%', lg: '60%' })}
+        maxW={messageBubbleMaxW}
         borderRadius="lg"
-        p={useBreakpointValue({ base: 4, md: 3 })}
-        fontSize={useBreakpointValue({ base: 'md', md: 'sm' })}
+        p={messageBubbleP}
+        fontSize={messageBubbleFontSize}
         {...(isUser
           ? { colorPalette: 'blue', bg: 'colorPalette.solid', color: 'colorPalette.contrast' }
           : { bg: 'bg.subtle', color: 'fg' })}
@@ -91,7 +91,7 @@ function MessageBubble(props: { message: ChatMessage }) {
           </Box>
         )}
         {message.images && message.images.length > 0 && (
-          <HStack gap={useBreakpointValue({ base: 1, md: 2 })} mt={2} wrap="wrap">
+          <HStack gap={imageGap} mt={2} wrap="wrap">
             {message.images.map((src, idx) => (
               <ResponsiveImage 
                 key={idx} 
@@ -160,6 +160,34 @@ export default function ChatPage() {
   const abortRef = useRef<AbortController | null>(null)
 
   const isMobile = useBreakpointValue({ base: true, md: false })
+  
+  // Pre-compute all breakpoint values to avoid conditional hook calls
+  const messageBubbleMaxW = useBreakpointValue({ base: '95%', sm: '85%', md: '70%', lg: '60%' })
+  const messageBubbleP = useBreakpointValue({ base: 4, md: 3 })
+  const messageBubbleFontSize = useBreakpointValue({ base: 'md', md: 'sm' })
+  const imageGap = useBreakpointValue({ base: 1, md: 2 })
+  const mobileWidth = useBreakpointValue({ base: '85%', sm: '75%' })
+  const cameraP = useBreakpointValue({ base: 3, md: 4 })
+  const cameraMaxW = useBreakpointValue({ base: '95%', sm: '80%', md: 'sm' })
+  const headerPy = useBreakpointValue({ base: 2, md: 4 })
+  const headerPx = useBreakpointValue({ base: 3, md: 6 })
+  const contentPy = useBreakpointValue({ base: 3, md: 6 })
+  const contentPx = useBreakpointValue({ base: 3, md: 6 })
+  const inputContainerPy = useBreakpointValue({ base: 3, md: 4 })
+  const inputContainerPx = useBreakpointValue({ base: 3, md: 6 })
+  const inputGap = useBreakpointValue({ base: 1, md: 2 })
+  const clearButtonSize = useBreakpointValue({ base: 'sm', md: 'xs' })
+  const textareaRows = useBreakpointValue({ base: 2, md: 3 })
+  const textareaFontSize = useBreakpointValue({ base: 'md', md: 'sm' })
+  const textareaMinH = useBreakpointValue({ base: '44px', md: 'auto' })
+  const bottomFlexWrap = useBreakpointValue({ base: 'wrap', md: 'nowrap' })
+  const bottomGap = useBreakpointValue({ base: 2, md: 0 })
+  const bottomHStackGap = useBreakpointValue({ base: 1, md: 2 })
+  const buttonSize = useBreakpointValue({ base: 'md', md: 'sm' })
+  const buttonMinH = useBreakpointValue({ base: '44px', md: 'auto' })
+  const sendButtonSize = useBreakpointValue({ base: 'md', md: 'sm' })
+  const sendButtonMinH = useBreakpointValue({ base: '44px', md: 'auto' })
+  
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(false)
   const [accountMenuOpen, setAccountMenuOpen] = useState<boolean>(false)
@@ -578,6 +606,7 @@ export default function ChatPage() {
 
   return (
     <Flex minH="100dvh" bg={pageBg} color={pageFg}>
+      {/* Desktop collapsed sidebar button */}
       {!isMobile && sidebarCollapsed && (
         <Box position="fixed" top={3} left={3} zIndex={20}>
           <IconButton
@@ -586,6 +615,21 @@ export default function ChatPage() {
             backgroundColor={darkMode ? 'gray.700' : 'gray.300'}
             color={darkMode ? 'white' : 'black'}
             onClick={() => setSidebarCollapsed(false)}
+          >
+            <MenuIcon size={18} />
+          </IconButton>
+        </Box>
+      )}
+
+      {/* Mobile menu button */}
+      {isMobile && (
+        <Box position="fixed" top={3} left={3} zIndex={10}>
+          <IconButton
+            aria-label="Open sidebar"
+            variant="ghost"
+            backgroundColor={darkMode ? 'black' : 'gray.300'}
+            color={darkMode ? 'white' : 'black'}
+            onClick={() => setSidebarOpen(true)}
           >
             <MenuIcon size={18} />
           </IconButton>
@@ -781,10 +825,13 @@ export default function ChatPage() {
             top={0} 
             left={0} 
             h="100%" 
-            w={useBreakpointValue({ base: '85%', sm: '75%' })} 
+            w={mobileWidth} 
             maxW="20rem" 
             bg={darkMode ? '#1f1f1f' : '#ffffff'} 
             borderRightWidth="1px"
+            overflowY="hidden"
+            display="flex"
+            flexDirection="column"
           >
             {/* App Title and Description */}
             <Box p={3} borderBottomWidth="1px" borderColor={borderCol}>
@@ -808,7 +855,7 @@ export default function ChatPage() {
                 <ChevronsLeft size={18} />
               </IconButton>
             </HStack>
-            <Box p={3}>
+            <Box p={3} flex="1" display="flex" flexDirection="column" minH={0}>
               <Button
                 onClick={createNewThread}
                 backgroundColor={darkMode ? 'black' : 'gray.300'}
@@ -818,12 +865,13 @@ export default function ChatPage() {
               >
                 New chat
               </Button>
-              <Stack gap={1}>
+
+              <Stack gap={1} overflowY="auto" flex="1">
                 {threads.map((t) => {
                   const selected = t.id === currentThread?.id
                   return (
                     <HStack key={t.id} gap={1} align="center" minW={0}>
-                  <Button
+                      <Button
                         onClick={() => {
                           setCurrentThreadId(t.id)
                           setSidebarOpen(false)
@@ -833,7 +881,7 @@ export default function ChatPage() {
                         textOverflow="ellipsis"
                         whiteSpace="nowrap"
                         flex="1"
-                    minW={0}
+                        minW={0}
                         backgroundColor={selected ? (darkMode ? '#3a3a3a' : '#eaeaea') : 'transparent'}
                         color={selected ? (darkMode ? 'white' : 'black') : pageFg}
                       >
@@ -854,14 +902,11 @@ export default function ChatPage() {
 
             {/* Account Information Section - Mobile */}
             <Box 
-              position="absolute" 
-              bottom={0} 
-              left={0} 
-              right={0} 
               borderTopWidth="1px" 
               borderColor={borderCol}
               p={3}
               bg={darkMode ? '#1f1f1f' : '#ffffff'}
+              flexShrink={0}
             >
               <MenuRoot
                 open={accountMenuOpen}
@@ -968,10 +1013,10 @@ export default function ChatPage() {
             <Flex position="absolute" inset={0} align="center" justify="center">
               <Box 
                 bg={darkMode ? '#1f1f1f' : '#ffffff'} 
-                p={useBreakpointValue({ base: 3, md: 4 })} 
+                p={cameraP} 
                 borderRadius="md" 
                 borderWidth="1px" 
-                maxW={useBreakpointValue({ base: '95%', sm: '80%', md: 'sm' })} 
+                maxW={cameraMaxW} 
                 w="full"
                 mx={2}
               >
@@ -991,24 +1036,13 @@ export default function ChatPage() {
           </Box>
         )}
         <Box borderBottomWidth="1px" bg={pageBg}>
-          <Container maxW="4xl" py={useBreakpointValue({ base: 2, md: 4 })} px={useBreakpointValue({ base: 3, md: 6 })}>
+          <Container maxW="4xl" py={headerPy} px={headerPx}>
                           <HStack justify="space-between" align="center">
               <HStack gap={2}>
-                {isMobile && (
-                  <IconButton
-                    aria-label="Open sidebar"
-                    variant="ghost"
-                    backgroundColor={darkMode ? 'black' : 'gray.300'}
-                    color={darkMode ? 'white' : 'black'}
-                    onClick={() => setSidebarOpen(true)}
-                  >
-                    <MenuIcon size={18} />
-                  </IconButton>
-                )}
-
+                {/* Mobile menu button moved to top-left fixed position */}
               </HStack>
               
-              <HStack gap={useBreakpointValue({ base: 1, md: 2 })}>
+              <HStack gap={bottomHStackGap}>
                 {/* Theme toggle moved to account menu */}
               </HStack>
             </HStack>
@@ -1016,20 +1050,27 @@ export default function ChatPage() {
         </Box>
 
         <Box flex="1" overflowY="auto" ref={scrollRef}>
-          <Container maxW="4xl" py={useBreakpointValue({ base: 3, md: 6 })} px={useBreakpointValue({ base: 3, md: 6 })}>
+          <Container maxW="4xl" py={contentPy} px={contentPx}>
             <Stack gap={4}>
               {messages.map((message) => (
-                <MessageBubble key={message.id} message={message} />
+                <MessageBubble 
+                  key={message.id} 
+                  message={message} 
+                  messageBubbleMaxW={messageBubbleMaxW}
+                  messageBubbleP={messageBubbleP}
+                  messageBubbleFontSize={messageBubbleFontSize}
+                  imageGap={imageGap}
+                />
               ))}
             </Stack>
           </Container>
         </Box>
 
         <Box borderTopWidth="1px" bg={pageBg} position="sticky" bottom={0}>
-          <Container maxW="4xl" py={useBreakpointValue({ base: 3, md: 4 })} px={useBreakpointValue({ base: 3, md: 6 })}>
+          <Container maxW="4xl" py={inputContainerPy} px={inputContainerPx}>
             <Stack gap={3}>
             {images.length > 0 && (
-              <HStack gap={useBreakpointValue({ base: 1, md: 2 })} wrap="wrap">
+              <HStack gap={inputGap} wrap="wrap">
                 {images.map((src, idx) => (
                   <Box key={idx} position="relative">
                     <ResponsiveImage 
@@ -1042,7 +1083,7 @@ export default function ChatPage() {
                 ))}
                 <Button 
                   onClick={clearImages} 
-                  size={useBreakpointValue({ base: 'sm', md: 'xs' })}
+                  size={clearButtonSize}
                   backgroundColor={darkMode ? 'gray.700' : 'gray.300'} 
                   color={darkMode ? 'white' : 'black'}
                 >
@@ -1056,18 +1097,18 @@ export default function ChatPage() {
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={handleKeyDown}
                 resize="none"
-                rows={useBreakpointValue({ base: 2, md: 3 })}
+                rows={textareaRows}
                 disabled={isSending}
                 bg={pageBg}
                 color={pageFg}
                 borderColor={borderCol}
-                fontSize={useBreakpointValue({ base: 'md', md: 'sm' })}
-                minH={useBreakpointValue({ base: '44px', md: 'auto' })}
+                fontSize={textareaFontSize}
+                minH={textareaMinH}
                 _placeholder={{ color: placeholderCol }}
                 shadow="sm"
               />
-            <HStack justify="space-between" flexWrap={useBreakpointValue({ base: 'wrap', md: 'nowrap' })} gap={useBreakpointValue({ base: 2, md: 0 })}>
-              <HStack gap={useBreakpointValue({ base: 1, md: 2 })}>
+            <HStack justify="space-between" flexWrap={bottomFlexWrap} gap={bottomGap}>
+              <HStack gap={bottomHStackGap}>
                 <input
                   ref={fileInputRef}
                   type="file"
@@ -1086,8 +1127,8 @@ export default function ChatPage() {
                 />
                 <Button
                   onClick={() => fileInputRef.current?.click()}
-                  size={useBreakpointValue({ base: 'md', md: 'sm' })}
-                  minH={useBreakpointValue({ base: '44px', md: 'auto' })}
+                  size={buttonSize}
+                  minH={buttonMinH}
                   backgroundColor={darkMode ? 'gray.700' : 'gray.300'}
                   color={darkMode ? 'white' : 'black'}
                 >
@@ -1095,8 +1136,8 @@ export default function ChatPage() {
                 </Button>
                 <Button
                   onClick={() => void openCamera()}
-                  size={useBreakpointValue({ base: 'md', md: 'sm' })}
-                  minH={useBreakpointValue({ base: '44px', md: 'auto' })}
+                  size={buttonSize}
+                  minH={buttonMinH}
                   backgroundColor={darkMode ? 'gray.700' : 'gray.300'}
                   color={darkMode ? 'white' : 'black'}
                 >
@@ -1105,8 +1146,8 @@ export default function ChatPage() {
               </HStack>
               <Button
                 onClick={() => void handleSend()}
-                size={useBreakpointValue({ base: 'md', md: 'sm' })}
-                minH={useBreakpointValue({ base: '44px', md: 'auto' })}
+                size={sendButtonSize}
+                minH={sendButtonMinH}
                 backgroundColor={darkMode ? 'black' : 'gray.300'}
                 color={darkMode ? 'white' : 'black'}
                 disabled={!canSend}
