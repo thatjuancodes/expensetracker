@@ -30,48 +30,25 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    // Handle OAuth callback if present in URL
-    const handleOAuthCallback = async () => {
-      // Check if we have OAuth tokens in the URL
-      const urlParams = new URLSearchParams(window.location.search)
-      const hasOAuthParams = urlParams.has('access_token') || urlParams.has('code') || urlParams.has('error')
-      
-      if (hasOAuthParams) {
-        try {
-          // Let Supabase handle the OAuth callback
-          const { data, error } = await supabase.auth.getSession()
-          if (error) {
-            console.error('OAuth callback error:', error)
-          } else if (data.session) {
-            // Clean up the URL after successful authentication
-            window.history.replaceState({}, document.title, window.location.pathname)
-          }
-        } catch (err) {
-          console.error('Error processing OAuth callback:', err)
-        }
-      }
-    }
-
-    // Handle OAuth callback first
-    handleOAuthCallback().then(() => {
-      // Then get the current session
-      return supabase.auth.getSession()
-    }).then(({ data: { session } }) => {
+    // Get initial session
+    supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session)
       setUser(session?.user ?? null)
       setLoading(false)
-    }).catch((error) => {
-      console.error('Error getting session:', error)
-      setLoading(false)
     })
 
-    // Listen for auth changes
+    // Listen for auth changes (this automatically handles OAuth callbacks)
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session)
       setUser(session?.user ?? null)
       setLoading(false)
+      
+      // Clean up OAuth callback URL fragments after successful sign in
+      if (session && window.location.hash.includes('access_token')) {
+        window.history.replaceState({}, document.title, window.location.pathname)
+      }
     })
 
     return () => subscription.unsubscribe()
@@ -81,7 +58,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     return await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: `${window.location.origin}/`,
+        redirectTo: window.location.origin,
         queryParams: {
           access_type: 'offline',
           prompt: 'consent',
