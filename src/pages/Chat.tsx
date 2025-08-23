@@ -176,16 +176,16 @@ export default function ChatPage() {
   const inputContainerPy = useBreakpointValue({ base: 3, md: 4 })
   const inputContainerPx = useBreakpointValue({ base: 3, md: 6 })
   const inputGap = useBreakpointValue({ base: 1, md: 2 })
-  const clearButtonSize = useBreakpointValue({ base: 'sm', md: 'xs' })
+  const clearButtonSize = useBreakpointValue({ base: 'sm', md: 'xs' }) as 'xs' | 'sm' | 'md' | 'lg'
   const textareaRows = useBreakpointValue({ base: 2, md: 3 })
   const textareaFontSize = useBreakpointValue({ base: 'md', md: 'sm' })
   const textareaMinH = useBreakpointValue({ base: '44px', md: 'auto' })
   const bottomFlexWrap = useBreakpointValue({ base: 'wrap', md: 'nowrap' })
   const bottomGap = useBreakpointValue({ base: 2, md: 0 })
   const bottomHStackGap = useBreakpointValue({ base: 1, md: 2 })
-  const buttonSize = useBreakpointValue({ base: 'md', md: 'sm' })
+  const buttonSize = useBreakpointValue({ base: 'md', md: 'sm' }) as 'xs' | 'sm' | 'md' | 'lg'
   const buttonMinH = useBreakpointValue({ base: '44px', md: 'auto' })
-  const sendButtonSize = useBreakpointValue({ base: 'md', md: 'sm' })
+  const sendButtonSize = useBreakpointValue({ base: 'md', md: 'sm' }) as 'xs' | 'sm' | 'md' | 'lg'
   const sendButtonMinH = useBreakpointValue({ base: '44px', md: 'auto' })
   
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(false)
@@ -546,20 +546,6 @@ export default function ChatPage() {
     }
   }, [])
 
-  function ColorModeToggle() {
-    const { resolvedTheme, setTheme } = useTheme()
-    const dark = resolvedTheme === 'dark'
-    return (
-      <IconButton
-        aria-label="Toggle color mode"
-        variant="ghost"
-        backgroundColor={dark ? 'black' : 'gray.300'}
-        onClick={() => setTheme(dark ? 'light' : 'dark')}
-      >
-        {dark ? <Sun size={18} /> : <Moon size={18} />}
-      </IconButton>
-    )
-  }
 
   function handleKeyDown(event: React.KeyboardEvent<HTMLTextAreaElement>) {
     if (event.key === 'Enter' && !event.shiftKey) {
@@ -729,7 +715,7 @@ export default function ChatPage() {
           <MenuRoot
             open={accountMenuOpen}
             onOpenChange={(e) => setAccountMenuOpen(e.open)}
-            placement="top-start"
+
           >
             <MenuTrigger asChild>
               <Box
@@ -911,7 +897,7 @@ export default function ChatPage() {
               <MenuRoot
                 open={accountMenuOpen}
                 onOpenChange={(e) => setAccountMenuOpen(e.open)}
-                placement="top-start"
+    
               >
                 <MenuTrigger asChild>
                   <Box
