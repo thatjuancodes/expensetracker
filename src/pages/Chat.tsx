@@ -106,6 +106,47 @@ function MessageBubble(props: { message: ChatMessage; messageBubbleMaxW: any; me
   )
 }
 
+function DevModeSwitch(props: { checked: boolean; onToggle: () => void; darkMode: boolean }) {
+  const { checked, onToggle, darkMode } = props
+  return (
+    <Box
+      role="switch"
+      aria-checked={checked}
+      tabIndex={0}
+      onClick={(e) => {
+        e.stopPropagation()
+        onToggle()
+      }}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          e.stopPropagation()
+          onToggle()
+        }
+      }}
+      w={10}
+      h={5}
+      borderRadius="full"
+      backgroundColor={checked ? 'green.400' : darkMode ? 'gray.600' : 'gray.300'}
+      position="relative"
+      transition="background-color 0.2s ease"
+      cursor="pointer"
+    >
+      <Box
+        position="absolute"
+        top={1}
+        left={checked ? 5 : 1}
+        w={3}
+        h={3}
+        borderRadius="full"
+        backgroundColor={checked ? 'white' : darkMode ? 'white' : 'white'}
+        transition="left 0.2s ease"
+        boxShadow="sm"
+      />
+    </Box>
+  )
+}
+
 export default function ChatPage() {
   const { resolvedTheme, setTheme } = useTheme()
   const { session, signOut } = useAuth()
@@ -190,6 +231,18 @@ export default function ChatPage() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(false)
   const [accountMenuOpen, setAccountMenuOpen] = useState<boolean>(false)
   const [isSigningOut, setIsSigningOut] = useState<boolean>(false)
+  const [devMode, setDevMode] = useState(() => {
+    const saved = localStorage.getItem('devMode')
+    return saved ? JSON.parse(saved) : false
+  })
+
+  const handleDevModeToggle = () => {
+    setDevMode((prev) => {
+      const newValue = !prev
+      localStorage.setItem('devMode', JSON.stringify(newValue))
+      return newValue
+    })
+  }
 
   const handleSignOut = async () => {
     try {
@@ -385,6 +438,14 @@ export default function ChatPage() {
     })
   }
 
+  const uploadUrl = devMode
+    ? 'https://homemakr.app.n8n.cloud/webhook-test/upload'
+    : 'https://homemakr.app.n8n.cloud/webhook/upload'
+
+  const promptUrl = devMode
+    ? 'https://homemakr.app.n8n.cloud/webhook-test/prompt'
+    : 'https://homemakr.app.n8n.cloud/webhook/prompt'
+
   async function handleSend() {
     if (!canSend) return
 
@@ -426,7 +487,8 @@ export default function ChatPage() {
           filename: 'receipt.jpg',
           additionalFields: {
             userId: session?.user?.id || 'anonymous'
-          }
+          },
+          uploadUrl
         })
 
         const assistantMessage: ChatMessage = {
@@ -462,7 +524,7 @@ export default function ChatPage() {
         )
       } else {
         // Send text-only message to n8n endpoint
-        const response = await fetch('https://homemakr.app.n8n.cloud/webhook-test/prompt', {
+        const response = await fetch(promptUrl, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -773,6 +835,20 @@ export default function ChatPage() {
                       <Text>{isSigningOut ? 'Signing out...' : 'Sign out'}</Text>
                     </HStack>
                   </MenuItem>
+                  {session?.user?.email === 'thejuan.codes@gmail.com' && (
+                    <MenuItem
+                      value="devmode"
+                      color={darkMode ? 'white' : 'black'}
+                      _hover={{
+                        backgroundColor: darkMode ? 'gray.600' : 'gray.100',
+                      }}
+                    >
+                      <HStack gap={2} justify="space-between" align="center" w="full">
+                        <Text>{'DEV MODE'}</Text>
+                        <DevModeSwitch checked={devMode} onToggle={handleDevModeToggle} darkMode={darkMode} />
+                      </HStack>
+                    </MenuItem>
+                  )}
                 </MenuContent>
               </MenuPositioner>
             </Portal>
@@ -955,6 +1031,20 @@ export default function ChatPage() {
                           <Text>{isSigningOut ? 'Signing out...' : 'Sign out'}</Text>
                         </HStack>
                       </MenuItem>
+                      {session?.user?.email === 'thejuan.codes@gmail.com' && (
+                        <MenuItem
+                          value="devmode"
+                          color={darkMode ? 'white' : 'black'}
+                          _hover={{
+                            backgroundColor: darkMode ? 'gray.600' : 'gray.100',
+                          }}
+                        >
+                          <HStack gap={2} justify="space-between" align="center" w="full">
+                            <Text>{'DEV MODE'}</Text>
+                            <DevModeSwitch checked={devMode} onToggle={handleDevModeToggle} darkMode={darkMode} />
+                          </HStack>
+                        </MenuItem>
+                      )}
                     </MenuContent>
                   </MenuPositioner>
                 </Portal>
