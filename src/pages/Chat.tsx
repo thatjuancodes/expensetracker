@@ -1022,6 +1022,13 @@ export default function ChatPage() {
                 devMode={devMode}
                 onToggleDevMode={handleDevModeToggle}
                 onAdminNavigate={() => setSidebarOpen(false)}
+                showTalkMode
+                talkMode={talkMode}
+                onToggleTalkMode={handleToggleTalkMode}
+                showVoicePicker
+                voiceOptions={voiceOptions}
+                selectedVoiceUri={voiceUri}
+                onSelectVoiceUri={handleSelectVoiceUri}
               />
             </Box>
           </Box>
