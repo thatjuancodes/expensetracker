@@ -25,6 +25,8 @@ let expensesInflight: Promise<SimpleExpense[] | null> | null = null
 // In-memory caches (cleared on page reload)
 const usersCache: { dev?: SimpleUser[]; prod?: SimpleUser[] } = {}
 const expensesCache: Record<string, { dev?: SimpleExpense[]; prod?: SimpleExpense[] }> = {}
+let incomeInflight: Promise<SimpleIncome[] | null> | null = null
+const incomeCache: Record<string, { dev?: SimpleIncome[]; prod?: SimpleIncome[] }> = {}
 
 interface SimpleUser {
   id: string
@@ -33,6 +35,15 @@ interface SimpleUser {
 }
 
 interface SimpleExpense {
+  id: string
+  date?: string
+  amount?: number | string
+  category?: string | null
+  merchant?: string | null
+  note?: string | null
+}
+
+interface SimpleIncome {
   id: string
   date?: string
   amount?: number | string
@@ -56,6 +67,9 @@ export default function AdminPage() {
   const [loadingExpenses, setLoadingExpenses] = useState<boolean>(false)
   const [expensesError, setExpensesError] = useState<string | null>(null)
   const [expenses, setExpenses] = useState<SimpleExpense[]>([])
+  const [loadingIncome, setLoadingIncome] = useState<boolean>(false)
+  const [incomeError, setIncomeError] = useState<string | null>(null)
+  const [income, setIncome] = useState<SimpleIncome[]>([])
   const [devMode, setDevMode] = useState<boolean>(() => {
     const saved = localStorage.getItem('devMode')
     return saved ? JSON.parse(saved) : false
@@ -320,6 +334,155 @@ export default function AdminPage() {
     }
   }, [activeTab, devMode, user?.id])
 
+  useEffect(() => {
+    if (activeTab !== 'income') return
+    let cancelled = false
+    const loadIncome = async () => {
+      setLoadingIncome(true)
+      setIncomeError(null)
+      if (!user?.id) {
+        setLoadingIncome(false)
+        return
+      }
+      try {
+        const envKey = devMode ? 'dev' : 'prod'
+        const cached = incomeCache[user.id]?.[envKey]
+        if (cached) {
+          if (!cancelled) setIncome(cached)
+          return
+        }
+
+        if (incomeInflight) {
+          const list = await incomeInflight
+          if (!cancelled && list) setIncome(list)
+          return
+        }
+
+        const url = devMode
+          ? 'https://homemakr.app.n8n.cloud/webhook-test/user/income'
+          : 'https://homemakr.app.n8n.cloud/webhook/user/income'
+
+        incomeInflight = (async (): Promise<SimpleIncome[] | null> => {
+          const urlWithQuery = `${url}?userId=${encodeURIComponent(user.id)}`
+          const response = await fetch(urlWithQuery, { method: 'GET' })
+          if (!response.ok) {
+            const text = await response.text().catch(() => '')
+            throw new Error(`n8n error ${response.status}${text ? `: ${text}` : ''}`)
+          }
+          const payload = (await response.json().catch(() => null)) as unknown
+
+          const normalize = (data: unknown): SimpleIncome[] => {
+            const mapOne = (obj: Record<string, unknown>): SimpleIncome | null => {
+              const id = (obj.id as string) ?? ''
+              if (!id) return null
+              const date =
+                (obj.date as string) ||
+                (obj.timestamp as string) ||
+                (obj.created_at as string) ||
+                (obj.createdAt as string)
+              const rawAmount =
+                (obj.amount as number | string) ??
+                (obj.total as number | string) ??
+                (obj.total_amount as number | string) ??
+                (obj.value as number | string)
+              const currency = (obj.currency as string) || undefined
+              const amount = currency != null && rawAmount != null ? `${rawAmount} ${currency}` : rawAmount
+              const category = (obj.category as string) ?? null
+              const merchant =
+                (obj.provider as string) ??
+                (obj.merchant as string) ??
+                (obj.vendor as string) ??
+                (obj.payee as string) ??
+                null
+              const note =
+                (obj.notes as string) ??
+                (obj.description as string) ??
+                (obj.name as string) ??
+                (obj.note as string) ??
+                (obj.memo as string) ??
+                null
+              return { id: String(id), date, amount, category, merchant, note }
+            }
+
+            const mapMany = (arr: unknown[]): SimpleIncome[] =>
+              arr
+                .map((item) => (item && typeof item === 'object' ? mapOne(item as Record<string, unknown>) : null))
+                .filter(Boolean) as SimpleIncome[]
+
+            if (Array.isArray(data)) {
+              const direct = mapMany(data)
+              if (direct.length > 0) return direct
+              const nested = data
+                .filter((item) => item && typeof item === 'object' && Array.isArray((item as any).data))
+                .map((item) => (item as any).data as unknown[])
+              if (nested.length > 0) return mapMany(nested.flat())
+              return []
+            }
+            if (data && typeof data === 'object') {
+              const obj = data as Record<string, unknown>
+              if (Array.isArray(obj.data)) return mapMany(obj.data as unknown[])
+              const single = mapOne(obj)
+              if (single) return [single]
+            }
+            return []
+          }
+
+          let list = normalize(payload)
+          if ((!list || list.length === 0) && Array.isArray(payload) && payload.length > 0) {
+            list = (payload as unknown[]).map((o, idx) => {
+              const r = (o ?? {}) as Record<string, unknown>
+              const id = String((r.id as unknown) ?? idx)
+              const date = (r.timestamp as string) || (r.created_at as string) || (r.date as string)
+              const amt =
+                (r.total_amount as number | string) ??
+                (r.amount as number | string) ??
+                (r.total as number | string) ??
+                (r.value as number | string)
+              const currency = (r.currency as string) || undefined
+              const amount = currency != null && amt != null ? `${amt} ${currency}` : amt
+              const category = (r.category as string) ?? null
+              const merchant =
+                (r.provider as string) ??
+                (r.merchant as string) ??
+                (r.vendor as string) ??
+                (r.payee as string) ??
+                null
+              const note =
+                (r.notes as string) ??
+                (r.description as string) ??
+                (r.name as string) ??
+                (r.note as string) ??
+                (r.memo as string) ??
+                null
+              return { id, date, amount, category, merchant, note }
+            })
+          }
+          return list
+        })()
+
+        try {
+          const list = await incomeInflight
+          if (!cancelled && list) {
+            setIncome(list)
+            if (!incomeCache[user.id]) incomeCache[user.id] = {}
+            incomeCache[user.id][envKey] = list
+          }
+        } finally {
+          incomeInflight = null
+        }
+      } catch (e) {
+        if (!cancelled) setIncomeError('Failed to load income')
+      } finally {
+        if (!cancelled) setLoadingIncome(false)
+      }
+    }
+
+    void loadIncome()
+    return () => {
+      cancelled = true
+    }
+  }, [activeTab, devMode, user?.id])
+
   const header = useMemo(
     () => (
       <HStack justify="space-between" align="center">
@@ -419,6 +582,16 @@ export default function AdminPage() {
               >
                 Expenses
               </TabsTrigger>
+              <TabsTrigger
+                value="income"
+                backgroundColor="transparent"
+                color={pageFg}
+                _hover={{ backgroundColor: darkMode ? 'gray.700' : 'gray.100' }}
+                css={{ '&[data-selected=true]': { backgroundColor: darkMode ? '#3a3a3a' : '#eaeaea', color: pageFg } }}
+                onClick={() => setActiveTab('income')}
+              >
+                Income
+              </TabsTrigger>
             </TabsList>
 
             <TabsContent value="users">
@@ -512,6 +685,59 @@ export default function AdminPage() {
                             <Table.Cell>{ex.category ?? '—'}</Table.Cell>
                             <Table.Cell textAlign="right">{ex.amount ?? '—'}</Table.Cell>
                             <Table.Cell>{ex.note ?? '—'}</Table.Cell>
+                          </Table.Row>
+                        ))
+                      )}
+                    </Table.Body>
+                  </Table.Root>
+                </Box>
+              </Stack>
+            </TabsContent>
+
+            <TabsContent value="income">
+              <Stack gap={3}>
+                {incomeError && (
+                  <Box
+                    borderWidth="1px"
+                    borderColor={borderCol}
+                    borderRadius="md"
+                    p={3}
+                    backgroundColor={darkMode ? '#3a2a2a' : '#fff5f5'}
+                  >
+                    <Text color={darkMode ? 'red.200' : 'red.700'}>{incomeError}</Text>
+                  </Box>
+                )}
+
+                <Box borderWidth="1px" borderColor={borderCol} borderRadius="md" overflowX="auto">
+                  <Table.Root size="sm">
+                    <Table.Header>
+                      <Table.Row>
+                        <Table.ColumnHeader>ID</Table.ColumnHeader>
+                        <Table.ColumnHeader>Date</Table.ColumnHeader>
+                        <Table.ColumnHeader>Source</Table.ColumnHeader>
+                        <Table.ColumnHeader>Category</Table.ColumnHeader>
+                        <Table.ColumnHeader textAlign="right">Amount</Table.ColumnHeader>
+                        <Table.ColumnHeader>Note</Table.ColumnHeader>
+                      </Table.Row>
+                    </Table.Header>
+                    <Table.Body>
+                      {loadingIncome ? (
+                        <Table.Row>
+                          <Table.Cell colSpan={6}>Loading...</Table.Cell>
+                        </Table.Row>
+                      ) : income.length === 0 ? (
+                        <Table.Row>
+                          <Table.Cell colSpan={6}>No income found</Table.Cell>
+                        </Table.Row>
+                      ) : (
+                        income.map((it) => (
+                          <Table.Row key={it.id}>
+                            <Table.Cell>{it.id}</Table.Cell>
+                            <Table.Cell>{it.date ?? '—'}</Table.Cell>
+                            <Table.Cell>{it.merchant ?? '—'}</Table.Cell>
+                            <Table.Cell>{it.category ?? '—'}</Table.Cell>
+                            <Table.Cell textAlign="right">{it.amount ?? '—'}</Table.Cell>
+                            <Table.Cell>{it.note ?? '—'}</Table.Cell>
                           </Table.Row>
                         ))
                       )}
