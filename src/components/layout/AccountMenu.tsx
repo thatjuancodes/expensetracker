@@ -22,10 +22,13 @@ interface AccountMenuProps {
   devMode: boolean
   onToggleDevMode: () => void
   onAdminNavigate?: () => void
+  showTalkMode?: boolean
+  talkMode?: boolean
+  onToggleTalkMode?: () => void
 }
 
 export default function AccountMenu(props: AccountMenuProps) {
-  const { darkMode, pageFg, borderCol, devMode, onToggleDevMode, onAdminNavigate } = props
+  const { darkMode, pageFg, borderCol, devMode, onToggleDevMode, onAdminNavigate, showTalkMode, talkMode, onToggleTalkMode } = props
   const { resolvedTheme, setTheme } = useTheme()
   const { session, signOut } = useAuth()
   const [open, setOpen] = useState(false)
@@ -97,6 +100,23 @@ export default function AccountMenu(props: AccountMenuProps) {
             minW="200px"
             shadow="lg"
           >
+            {showTalkMode && (
+              <MenuItem
+                value="talkmode"
+                color={darkMode ? 'white' : 'black'}
+                _hover={{ backgroundColor: darkMode ? 'gray.600' : 'gray.100' }}
+                onClick={(e) => {
+                  // allow toggle via click on row as well
+                  e.preventDefault()
+                  onToggleTalkMode?.()
+                }}
+              >
+                <HStack gap={2} justify="space-between" align="center" w="full">
+                  <Text>Talk Mode</Text>
+                  <DevModeSwitch checked={!!talkMode} onToggle={() => onToggleTalkMode?.()} darkMode={darkMode} />
+                </HStack>
+              </MenuItem>
+            )}
             <MenuItem
               value="theme"
               onPointerDown={handleThemeToggle}

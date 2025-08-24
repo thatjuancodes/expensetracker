@@ -139,6 +139,7 @@ function MessageBubble(props: { message: ChatMessage; messageBubbleMaxW: any; me
 export default function ChatPage() {
   const { resolvedTheme } = useTheme()
   const { session } = useAuth()
+  const { supported, speak } = useSpeechSynthesis()
   const darkMode = resolvedTheme === 'dark'
   const pageBg = darkMode ? '#2e2e2e' : '#f4f4f4'
   const pageFg = darkMode ? 'white' : 'gray.900'
@@ -229,6 +230,19 @@ export default function ChatPage() {
     return saved ? JSON.parse(saved) : false
   })
 
+  const [talkMode, setTalkMode] = useState<boolean>(() => {
+    const saved = localStorage.getItem('talkMode')
+    return saved ? JSON.parse(saved) : false
+  })
+
+  const handleToggleTalkMode = () => {
+    setTalkMode((prev) => {
+      const next = !prev
+      localStorage.setItem('talkMode', JSON.stringify(next))
+      return next
+    })
+  }
+
   const handleDevModeToggle = () => {
     setDevMode((prev: boolean) => {
       const newValue = !prev
@@ -288,6 +302,15 @@ export default function ChatPage() {
     // Auto-scroll to the latest message
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' })
   }, [messages])
+
+  // Auto-narrate the latest assistant message when talkMode is enabled
+  useEffect(() => {
+    if (!supported || !talkMode) return
+    const last = messages[messages.length - 1]
+    if (last && last.role === 'assistant' && last.content) {
+      speak(last.content)
+    }
+  }, [messages, supported, talkMode, speak])
 
   function createNewThread() {
     abortRef.current?.abort()
@@ -874,6 +897,9 @@ export default function ChatPage() {
             borderCol={borderCol}
             devMode={devMode}
             onToggleDevMode={handleDevModeToggle}
+            showTalkMode
+            talkMode={talkMode}
+            onToggleTalkMode={handleToggleTalkMode}
           />
         </Box>
       </Box>
