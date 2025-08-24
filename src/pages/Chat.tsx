@@ -149,8 +149,13 @@ export default function ChatPage() {
 
   const [input, setInput] = useState<string>('')
   const [images, setImages] = useState<string[]>([])
+  const [audioFile, setAudioFile] = useState<File | null>(null)
+  const [isRecording, setIsRecording] = useState<boolean>(false)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const cameraInputRef = useRef<HTMLInputElement | null>(null)
+  const audioStreamRef = useRef<MediaStream | null>(null)
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null)
+  const audioChunksRef = useRef<Blob[]>([])
   const [cameraOpen, setCameraOpen] = useState<boolean>(false)
   const videoRef = useRef<HTMLVideoElement | null>(null)
   const streamRef = useRef<MediaStream | null>(null)
@@ -244,6 +249,7 @@ export default function ChatPage() {
     () => (input.trim().length > 0 || images.length > 0) && !isSending,
     [input, images.length, isSending],
   )
+  const canSendVoice = useMemo(() => !!audioFile && !isSending && !isRecording, [audioFile, isSending, isRecording])
 
   useEffect(() => {
     // Persist threads & selection
@@ -297,6 +303,63 @@ export default function ChatPage() {
     setImages([])
   }
 
+  function clearAudio() {
+    setAudioFile(null)
+  }
+
+  async function startRecording() {
+    try {
+      if (!navigator.mediaDevices?.getUserMedia) {
+        window.alert('Microphone not supported in this browser')
+        return
+      }
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      audioStreamRef.current = stream
+      const recorder = new MediaRecorder(stream)
+      mediaRecorderRef.current = recorder
+      audioChunksRef.current = []
+
+      recorder.ondataavailable = (event: BlobEvent) => {
+        if (event.data && event.data.size > 0) {
+          audioChunksRef.current.push(event.data)
+        }
+      }
+
+      recorder.onstop = () => {
+        const blob = new Blob(audioChunksRef.current, { type: 'audio/webm' })
+        const file = new File([blob], `recording-${Date.now()}.webm`, { type: 'audio/webm' })
+        setAudioFile(file)
+        // cleanup stream
+        if (audioStreamRef.current) {
+          audioStreamRef.current.getTracks().forEach((t) => t.stop())
+          audioStreamRef.current = null
+        }
+        mediaRecorderRef.current = null
+        audioChunksRef.current = []
+        setIsRecording(false)
+      }
+
+      recorder.start()
+      setIsRecording(true)
+    } catch (err) {
+      window.alert('Unable to access microphone. Please check permissions.')
+    }
+  }
+
+  function stopRecording() {
+    const recorder = mediaRecorderRef.current
+    if (recorder && recorder.state !== 'inactive') {
+      recorder.stop()
+    } else {
+      // ensure cleanup if no recorder
+      if (audioStreamRef.current) {
+        audioStreamRef.current.getTracks().forEach((t) => t.stop())
+        audioStreamRef.current = null
+      }
+      setIsRecording(false)
+    }
+  }
+
   async function openCamera() {
     try {
       if (!navigator.mediaDevices?.getUserMedia) {
@@ -338,6 +401,77 @@ export default function ChatPage() {
     const dataUrl = canvas.toDataURL('image/jpeg', 0.9)
     setImages((prev) => [...prev, dataUrl])
     closeCamera()
+  }
+
+  async function handleSendVoice() {
+    if (!audioFile || isSending) return
+    const fileToUpload = audioFile
+    const filename = fileToUpload.name || 'voice.webm'
+
+    // Create a synthetic user message describing the voice submission
+    const userMessage: ChatMessage = {
+      id: generateMessageId(),
+      role: 'user',
+      content: `(Voice message) ${filename}`,
+    }
+
+    setAudioFile(null)
+
+    setThreads((prev) =>
+      prev.map((t) =>
+        t.id === currentThread.id
+          ? {
+              ...t,
+              title: t.title === 'New chat' ? `Voice: ${filename}`.slice(0, 40) : t.title,
+              messages: [...t.messages, userMessage],
+              updatedAt: Date.now(),
+            }
+          : t,
+      ),
+    )
+
+    setIsSending(true)
+    try {
+      const response = await n8nClient.uploadReceipt<unknown>(fileToUpload, {
+        filename,
+        additionalFields: {
+          userId: session?.user?.id || 'anonymous',
+        },
+        uploadUrl: audioUrl,
+      })
+
+      const content = extractN8nText(response) || `Voice uploaded: ${filename}`
+      const assistantMessage: ChatMessage = {
+        id: generateMessageId(),
+        role: 'assistant',
+        content,
+      }
+      setThreads((prev) =>
+        prev.map((t) =>
+          t.id === currentThread.id
+            ? { ...t, messages: [...t.messages, assistantMessage], updatedAt: Date.now() }
+            : t,
+        ),
+      )
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Unknown error'
+      setThreads((prev) =>
+        prev.map((t) =>
+          t.id === currentThread.id
+            ? {
+                ...t,
+                messages: [
+                  ...t.messages,
+                  { id: generateMessageId(), role: 'assistant', content: `Voice error: ${message}` },
+                ],
+                updatedAt: Date.now(),
+              }
+            : t,
+        ),
+      )
+    } finally {
+      setIsSending(false)
+    }
   }
 
   function renameThread(threadId: string) {
@@ -390,6 +524,10 @@ export default function ChatPage() {
   const promptUrl = devMode
     ? 'https://homemakr.app.n8n.cloud/webhook-test/prompt'
     : 'https://homemakr.app.n8n.cloud/webhook/prompt'
+
+  const audioUrl = devMode
+    ? 'https://homemakr.app.n8n.cloud/webhook-test/audio'
+    : 'https://homemakr.app.n8n.cloud/webhook/audio'
 
   async function handleSend() {
     if (!canSend) return
@@ -528,6 +666,11 @@ export default function ChatPage() {
       if (streamRef.current) {
         streamRef.current.getTracks().forEach((t) => t.stop())
         streamRef.current = null
+      }
+      // Ensure audio stream is closed on unmount
+      if (audioStreamRef.current) {
+        audioStreamRef.current.getTracks().forEach((t) => t.stop())
+        audioStreamRef.current = null
       }
     }
   }, [])
@@ -904,6 +1047,47 @@ export default function ChatPage() {
                 </Button>
               </HStack>
             )}
+            {audioFile && (
+              <HStack gap={inputGap} wrap="wrap">
+                <Box
+                  borderWidth="1px"
+                  borderRadius="md"
+                  px={3}
+                  py={2}
+                  bg={pageBg}
+                  borderColor={borderCol}
+                >
+                  <Text fontSize="sm" color={pageFg}>
+                    Selected audio: {audioFile.name}
+                  </Text>
+                </Box>
+
+                <Button 
+                  onClick={clearAudio} 
+                  size={clearButtonSize}
+                  backgroundColor={darkMode ? 'gray.700' : 'gray.300'} 
+                  color={darkMode ? 'white' : 'black'}
+                >
+                  Clear audio
+                </Button>
+              </HStack>
+            )}
+            {isRecording && (
+              <HStack gap={inputGap} wrap="wrap">
+                <Box
+                  borderWidth="1px"
+                  borderRadius="md"
+                  px={3}
+                  py={2}
+                  bg={pageBg}
+                  borderColor={borderCol}
+                >
+                  <Text fontSize="sm" color={pageFg}>
+                    Recording... tap Stop to finish
+                  </Text>
+                </Box>
+              </HStack>
+            )}
               <Textarea
                 placeholder="How can I help you today?"
                 value={input}
@@ -956,17 +1140,51 @@ export default function ChatPage() {
                 >
                   Take Photo
                 </Button>
+                {!isRecording ? (
+                  <Button
+                    onClick={() => void startRecording()}
+                    size={buttonSize}
+                    minH={buttonMinH}
+                    backgroundColor={darkMode ? 'gray.700' : 'gray.300'}
+                    color={darkMode ? 'white' : 'black'}
+                    disabled={isSending}
+                  >
+                    Start Recording
+                  </Button>
+                ) : (
+                  <Button
+                    onClick={() => stopRecording()}
+                    size={buttonSize}
+                    minH={buttonMinH}
+                    backgroundColor={darkMode ? 'black' : 'gray.300'}
+                    color={darkMode ? 'white' : 'black'}
+                  >
+                    Stop Recording
+                  </Button>
+                )}
               </HStack>
-              <Button
-                onClick={() => void handleSend()}
-                size={sendButtonSize}
-                minH={sendButtonMinH}
-                backgroundColor={darkMode ? 'black' : 'gray.300'}
-                color={darkMode ? 'white' : 'black'}
-                disabled={!canSend}
-              >
-                Send
-              </Button>
+              <HStack gap={bottomHStackGap}>
+                <Button
+                  onClick={() => void handleSend()}
+                  size={sendButtonSize}
+                  minH={sendButtonMinH}
+                  backgroundColor={darkMode ? 'black' : 'gray.300'}
+                  color={darkMode ? 'white' : 'black'}
+                  disabled={!canSend}
+                >
+                  Send
+                </Button>
+                <Button
+                  onClick={() => void handleSendVoice()}
+                  size={sendButtonSize}
+                  minH={sendButtonMinH}
+                  backgroundColor={darkMode ? 'black' : 'gray.300'}
+                  color={darkMode ? 'white' : 'black'}
+                  disabled={!canSendVoice}
+                >
+                  Send Voice
+                </Button>
+              </HStack>
             </HStack>
             </Stack>
           </Container>
