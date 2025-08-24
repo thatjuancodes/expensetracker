@@ -25,10 +25,14 @@ interface AccountMenuProps {
   showTalkMode?: boolean
   talkMode?: boolean
   onToggleTalkMode?: () => void
+  showVoicePicker?: boolean
+  voiceOptions?: Array<{ uri: string; label: string }>
+  selectedVoiceUri?: string
+  onSelectVoiceUri?: (uri: string) => void
 }
 
 export default function AccountMenu(props: AccountMenuProps) {
-  const { darkMode, pageFg, borderCol, devMode, onToggleDevMode, onAdminNavigate, showTalkMode, talkMode, onToggleTalkMode } = props
+  const { darkMode, pageFg, borderCol, devMode, onToggleDevMode, onAdminNavigate, showTalkMode, talkMode, onToggleTalkMode, showVoicePicker, voiceOptions, selectedVoiceUri, onSelectVoiceUri } = props
   const { resolvedTheme, setTheme } = useTheme()
   const { session, signOut } = useAuth()
   const [open, setOpen] = useState(false)
@@ -100,11 +104,49 @@ export default function AccountMenu(props: AccountMenuProps) {
             minW="200px"
             shadow="lg"
           >
+            {showVoicePicker && (voiceOptions?.length ?? 0) > 0 && (
+              <MenuItem
+                value="voice"
+                color={darkMode ? 'white' : 'black'}
+                _hover={{ backgroundColor: darkMode ? 'gray.600' : 'gray.100' }}
+                onPointerDown={(e) => {
+                  // Prevent menu from closing when interacting with the select
+                  e.stopPropagation()
+                }}
+              >
+                <HStack gap={2} justify="space-between" align="center" w="full">
+                  <Text>Voice</Text>
+                  <Box
+                    as="select"
+                    value={selectedVoiceUri ?? ''}
+                    onChange={(e: React.ChangeEvent<HTMLSelectElement>) => onSelectVoiceUri?.(e.target.value)}
+                    onClick={(e: React.MouseEvent) => e.stopPropagation()}
+                    onPointerDown={(e: React.PointerEvent) => e.stopPropagation()}
+                    onKeyDown={(e: React.KeyboardEvent) => e.stopPropagation()}
+                    bg={darkMode ? 'gray.700' : 'gray.200'}
+                    color={darkMode ? 'white' : 'black'}
+                    borderRadius="md"
+                    px={2}
+                    py={1}
+                  >
+                    {(voiceOptions ?? []).map((opt) => (
+                      <Box as="option" key={opt.uri} value={opt.uri} color={darkMode ? 'white' : 'black'}>
+                        {opt.label}
+                      </Box>
+                    ))}
+                  </Box>
+                </HStack>
+              </MenuItem>
+            )}
             {showTalkMode && (
               <MenuItem
                 value="talkmode"
                 color={darkMode ? 'white' : 'black'}
                 _hover={{ backgroundColor: darkMode ? 'gray.600' : 'gray.100' }}
+                onPointerDown={(e) => {
+                  // Prevent closing when toggling the switch
+                  e.stopPropagation()
+                }}
                 onClick={(e) => {
                   // allow toggle via click on row as well
                   e.preventDefault()

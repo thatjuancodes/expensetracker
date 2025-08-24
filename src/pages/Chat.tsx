@@ -139,7 +139,7 @@ function MessageBubble(props: { message: ChatMessage; messageBubbleMaxW: any; me
 export default function ChatPage() {
   const { resolvedTheme } = useTheme()
   const { session } = useAuth()
-  const { supported, speak } = useSpeechSynthesis()
+  const { supported, speak, voices } = useSpeechSynthesis()
   const darkMode = resolvedTheme === 'dark'
   const pageBg = darkMode ? '#2e2e2e' : '#f4f4f4'
   const pageFg = darkMode ? 'white' : 'gray.900'
@@ -235,12 +235,27 @@ export default function ChatPage() {
     return saved ? JSON.parse(saved) : false
   })
 
+  const [voiceUri, setVoiceUri] = useState<string | undefined>(() => {
+    const saved = localStorage.getItem('talkVoiceUri')
+    return saved ? JSON.parse(saved) : undefined
+  })
+
   const handleToggleTalkMode = () => {
     setTalkMode((prev) => {
       const next = !prev
       localStorage.setItem('talkMode', JSON.stringify(next))
       return next
     })
+  }
+
+  const selectedVoice = useMemo(() => voices.find((v) => v.voiceURI === voiceUri), [voices, voiceUri])
+  const voiceOptions = useMemo(
+    () => voices.map((v) => ({ uri: v.voiceURI, label: `${v.name}${v.lang ? ` (${v.lang})` : ''}` })),
+    [voices],
+  )
+  const handleSelectVoiceUri = (uri: string) => {
+    setVoiceUri(uri || undefined)
+    localStorage.setItem('talkVoiceUri', JSON.stringify(uri || ''))
   }
 
   const handleDevModeToggle = () => {
@@ -308,9 +323,9 @@ export default function ChatPage() {
     if (!supported || !talkMode) return
     const last = messages[messages.length - 1]
     if (last && last.role === 'assistant' && last.content) {
-      speak(last.content)
+      speak(last.content, { voice: selectedVoice })
     }
-  }, [messages, supported, talkMode, speak])
+  }, [messages, supported, talkMode, speak, selectedVoice])
 
   function createNewThread() {
     abortRef.current?.abort()
@@ -900,6 +915,10 @@ export default function ChatPage() {
             showTalkMode
             talkMode={talkMode}
             onToggleTalkMode={handleToggleTalkMode}
+            showVoicePicker
+            voiceOptions={voiceOptions}
+            selectedVoiceUri={voiceUri}
+            onSelectVoiceUri={handleSelectVoiceUri}
           />
         </Box>
       </Box>
