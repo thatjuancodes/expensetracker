@@ -16,11 +16,15 @@ import {
 import { useTheme } from 'next-themes'
 import { ChevronsLeft } from 'lucide-react'
 import AccountMenu from '../components/layout/AccountMenu'
+import { useAuth } from '../contexts/AuthContext'
 import { env } from '../config/env'
 
 // Prevent duplicate fetches across StrictMode re-mounts
 let usersInflight: Promise<SimpleUser[] | null> | null = null
-const USERS_CACHE_KEY = 'adminUsersCacheV1'
+let expensesInflight: Promise<SimpleExpense[] | null> | null = null
+// In-memory caches (cleared on page reload)
+const usersCache: { dev?: SimpleUser[]; prod?: SimpleUser[] } = {}
+const expensesCache: Record<string, { dev?: SimpleExpense[]; prod?: SimpleExpense[] }> = {}
 
 interface SimpleUser {
   id: string
@@ -28,8 +32,18 @@ interface SimpleUser {
   createdAt?: string
 }
 
+interface SimpleExpense {
+  id: string
+  date?: string
+  amount?: number | string
+  category?: string | null
+  merchant?: string | null
+  note?: string | null
+}
+
 export default function AdminPage() {
   const { resolvedTheme } = useTheme()
+  const { user } = useAuth()
   const darkMode = resolvedTheme === 'dark'
   const pageBg = darkMode ? '#2e2e2e' : '#f4f4f4'
   const pageFg = darkMode ? 'white' : 'gray.900'
@@ -39,6 +53,9 @@ export default function AdminPage() {
   const [loadingUsers, setLoadingUsers] = useState<boolean>(false)
   const [usersError, setUsersError] = useState<string | null>(null)
   const [users, setUsers] = useState<SimpleUser[]>([])
+  const [loadingExpenses, setLoadingExpenses] = useState<boolean>(false)
+  const [expensesError, setExpensesError] = useState<string | null>(null)
+  const [expenses, setExpenses] = useState<SimpleExpense[]>([])
   const [devMode, setDevMode] = useState<boolean>(() => {
     const saved = localStorage.getItem('devMode')
     return saved ? JSON.parse(saved) : false
@@ -59,18 +76,11 @@ export default function AdminPage() {
       setLoadingUsers(true)
       setUsersError(null)
       try {
-        const cacheKey = `${USERS_CACHE_KEY}:${devMode ? 'dev' : 'prod'}`
-
-        // Serve from cache if available (survives StrictMode re-mounts)
-        const cachedRaw = sessionStorage.getItem(cacheKey)
-        if (cachedRaw) {
-          try {
-            const cachedUsers = JSON.parse(cachedRaw) as SimpleUser[]
-            if (!cancelled) setUsers(cachedUsers)
-            return
-          } catch {
-            // ignore broken cache
-          }
+        const envKey = devMode ? 'dev' : 'prod'
+        const cachedUsers = usersCache[envKey]
+        if (cachedUsers) {
+          if (!cancelled) setUsers(cachedUsers)
+          return
         }
 
         // Reuse in-flight request if any
@@ -137,8 +147,7 @@ export default function AdminPage() {
           const list = await usersInflight
           if (!cancelled && list) {
             setUsers(list)
-            // Cache for this session to avoid re-calling test webhooks
-            sessionStorage.setItem(cacheKey, JSON.stringify(list))
+            usersCache[envKey] = list
           }
         } finally {
           usersInflight = null
@@ -155,6 +164,109 @@ export default function AdminPage() {
       cancelled = true
     }
   }, [activeTab, devMode])
+
+  useEffect(() => {
+    if (activeTab !== 'expenses') return
+    let cancelled = false
+    const loadExpenses = async () => {
+      setLoadingExpenses(true)
+      setExpensesError(null)
+      // Wait until we have an authenticated user before requesting
+      if (!user?.id) {
+        setLoadingExpenses(false)
+        return
+      }
+      try {
+
+        const envKey = devMode ? 'dev' : 'prod'
+        const cached = expensesCache[user.id]?.[envKey]
+        if (cached) {
+          if (!cancelled) setExpenses(cached)
+          return
+        }
+
+        if (expensesInflight) {
+          const list = await expensesInflight
+          if (!cancelled && list) setExpenses(list)
+          return
+        }
+
+        const url = devMode
+          ? 'https://homemakr.app.n8n.cloud/webhook-test/user/expenses'
+          : 'https://homemakr.app.n8n.cloud/webhook/user/expenses'
+
+        expensesInflight = (async (): Promise<SimpleExpense[] | null> => {
+          const urlWithQuery = `${url}?userId=${encodeURIComponent(user.id)}`
+          const response = await fetch(urlWithQuery, { method: 'GET' })
+          if (!response.ok) {
+            const text = await response.text().catch(() => '')
+            throw new Error(`n8n error ${response.status}${text ? `: ${text}` : ''}`)
+          }
+          const payload = (await response.json().catch(() => null)) as unknown
+
+          const normalizeExpenses = (data: unknown): SimpleExpense[] => {
+            const mapOne = (obj: Record<string, unknown>): SimpleExpense | null => {
+              const id = (obj.id as string) ?? ''
+              if (!id) return null
+              const date = (obj.date as string) ?? (obj.created_at as string) ?? (obj.createdAt as string)
+              const amount = (obj.amount as number | string) ?? (obj.total as number | string) ?? (obj.value as number | string)
+              const category = (obj.category as string) ?? null
+              const merchant = (obj.merchant as string) ?? (obj.vendor as string) ?? (obj.payee as string) ?? null
+              const note = (obj.note as string) ?? (obj.description as string) ?? (obj.memo as string) ?? null
+              return { id: String(id), date, amount, category, merchant, note }
+            }
+
+            const mapMany = (arr: unknown[]): SimpleExpense[] =>
+              arr
+                .map((item) => (item && typeof item === 'object' ? mapOne(item as Record<string, unknown>) : null))
+                .filter(Boolean) as SimpleExpense[]
+
+            if (Array.isArray(data)) {
+              const direct = mapMany(data)
+              if (direct.length > 0) return direct
+              const nestedDataArrays = data
+                .filter((item) => item && typeof item === 'object' && Array.isArray((item as any).data))
+                .map((item) => (item as any).data as unknown[])
+              if (nestedDataArrays.length > 0) {
+                const flattened = nestedDataArrays.flat()
+                return mapMany(flattened)
+              }
+              return []
+            }
+            if (data && typeof data === 'object') {
+              const obj = data as Record<string, unknown>
+              if (Array.isArray(obj.expenses)) return mapMany(obj.expenses as unknown[])
+              if (Array.isArray(obj.data)) return mapMany(obj.data as unknown[])
+            }
+            return []
+          }
+
+          const list = normalizeExpenses(payload)
+          return list
+        })()
+
+        try {
+          const list = await expensesInflight
+          if (!cancelled && list) {
+            setExpenses(list)
+            if (!expensesCache[user.id]) expensesCache[user.id] = {}
+            expensesCache[user.id][envKey] = list
+          }
+        } finally {
+          expensesInflight = null
+        }
+      } catch (e) {
+        if (!cancelled) setExpensesError('Failed to load expenses')
+      } finally {
+        if (!cancelled) setLoadingExpenses(false)
+      }
+    }
+
+    void loadExpenses()
+    return () => {
+      cancelled = true
+    }
+  }, [activeTab, devMode, user?.id])
 
   const header = useMemo(
     () => (
@@ -232,7 +344,7 @@ export default function AdminPage() {
           <TabsRoot
             mt={8}
             value={activeTab}
-            onValueChange={(e) => setActiveTab(e.value)}
+            onValueChange={(v: any) => setActiveTab(typeof v === 'string' ? v : v?.value)}
           >
             <TabsList backgroundColor="transparent">
               <TabsTrigger
@@ -241,8 +353,19 @@ export default function AdminPage() {
                 color={pageFg}
                 _hover={{ backgroundColor: darkMode ? 'gray.700' : 'gray.100' }}
                 css={{ '&[data-selected=true]': { backgroundColor: darkMode ? '#3a3a3a' : '#eaeaea', color: pageFg } }}
+                onClick={() => setActiveTab('users')}
               >
                 Users
+              </TabsTrigger>
+              <TabsTrigger
+                value="expenses"
+                backgroundColor="transparent"
+                color={pageFg}
+                _hover={{ backgroundColor: darkMode ? 'gray.700' : 'gray.100' }}
+                css={{ '&[data-selected=true]': { backgroundColor: darkMode ? '#3a3a3a' : '#eaeaea', color: pageFg } }}
+                onClick={() => setActiveTab('expenses')}
+              >
+                Expenses
               </TabsTrigger>
             </TabsList>
 
@@ -284,6 +407,59 @@ export default function AdminPage() {
                             <Table.Cell>{u.id}</Table.Cell>
                             <Table.Cell>{u.email ?? '—'}</Table.Cell>
                             <Table.Cell>{u.createdAt ?? '—'}</Table.Cell>
+                          </Table.Row>
+                        ))
+                      )}
+                    </Table.Body>
+                  </Table.Root>
+                </Box>
+              </Stack>
+            </TabsContent>
+
+            <TabsContent value="expenses">
+              <Stack gap={3}>
+                {expensesError && (
+                  <Box
+                    borderWidth="1px"
+                    borderColor={borderCol}
+                    borderRadius="md"
+                    p={3}
+                    backgroundColor={darkMode ? '#3a2a2a' : '#fff5f5'}
+                  >
+                    <Text color={darkMode ? 'red.200' : 'red.700'}>{expensesError}</Text>
+                  </Box>
+                )}
+
+                <Box borderWidth="1px" borderColor={borderCol} borderRadius="md" overflowX="auto">
+                  <Table.Root size="sm">
+                    <Table.Header>
+                      <Table.Row>
+                        <Table.ColumnHeader>ID</Table.ColumnHeader>
+                        <Table.ColumnHeader>Date</Table.ColumnHeader>
+                        <Table.ColumnHeader>Merchant</Table.ColumnHeader>
+                        <Table.ColumnHeader>Category</Table.ColumnHeader>
+                        <Table.ColumnHeader textAlign="right">Amount</Table.ColumnHeader>
+                        <Table.ColumnHeader>Note</Table.ColumnHeader>
+                      </Table.Row>
+                    </Table.Header>
+                    <Table.Body>
+                      {loadingExpenses ? (
+                        <Table.Row>
+                          <Table.Cell colSpan={6}>Loading...</Table.Cell>
+                        </Table.Row>
+                      ) : expenses.length === 0 ? (
+                        <Table.Row>
+                          <Table.Cell colSpan={6}>No expenses found</Table.Cell>
+                        </Table.Row>
+                      ) : (
+                        expenses.map((ex) => (
+                          <Table.Row key={ex.id}>
+                            <Table.Cell>{ex.id}</Table.Cell>
+                            <Table.Cell>{ex.date ?? '—'}</Table.Cell>
+                            <Table.Cell>{ex.merchant ?? '—'}</Table.Cell>
+                            <Table.Cell>{ex.category ?? '—'}</Table.Cell>
+                            <Table.Cell textAlign="right">{ex.amount ?? '—'}</Table.Cell>
+                            <Table.Cell>{ex.note ?? '—'}</Table.Cell>
                           </Table.Row>
                         ))
                       )}
