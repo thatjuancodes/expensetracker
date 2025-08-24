@@ -1,10 +1,27 @@
+import { useEffect, useState } from 'react'
 import ChatPage from './pages/Chat'
 import AuthGuard from './components/auth/AuthGuard'
+import AdminPage from './pages/Admin'
+
+function useHashRoute() {
+  const [hash, setHash] = useState<string>(() => window.location.hash || '#/')
+
+  useEffect(() => {
+    const onHashChange = () => setHash(window.location.hash || '#/')
+    window.addEventListener('hashchange', onHashChange)
+    return () => window.removeEventListener('hashchange', onHashChange)
+  }, [])
+
+  return hash
+}
 
 export default function App() {
+  const hash = useHashRoute()
+  const route = hash.replace(/^#/, '') || '/'
+
   return (
     <AuthGuard>
-      <ChatPage />
+      {route.startsWith('/admin') ? <AdminPage /> : <ChatPage />}
     </AuthGuard>
   )
 }

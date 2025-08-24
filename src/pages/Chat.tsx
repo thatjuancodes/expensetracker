@@ -25,6 +25,7 @@ import { env } from '../config/env'
 import { Moon, Sun, Menu as MenuIcon, ChevronsLeft, ChevronsRight, Edit2, Trash2, MoreVertical, Settings, LogOut } from 'lucide-react'
 
 import ResponsiveImage from '../components/ui/ResponsiveImage'
+import AccountMenu from '../components/layout/AccountMenu'
 import { useTheme } from 'next-themes'
 import { n8nClient } from '../service/api/n8n'
 import { useAuth } from '../contexts/AuthContext'
@@ -106,46 +107,7 @@ function MessageBubble(props: { message: ChatMessage; messageBubbleMaxW: any; me
   )
 }
 
-function DevModeSwitch(props: { checked: boolean; onToggle: () => void; darkMode: boolean }) {
-  const { checked, onToggle, darkMode } = props
-  return (
-    <Box
-      role="switch"
-      aria-checked={checked}
-      tabIndex={0}
-      onClick={(e) => {
-        e.stopPropagation()
-        onToggle()
-      }}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault()
-          e.stopPropagation()
-          onToggle()
-        }
-      }}
-      w={10}
-      h={5}
-      borderRadius="full"
-      backgroundColor={checked ? 'green.400' : darkMode ? 'gray.600' : 'gray.300'}
-      position="relative"
-      transition="background-color 0.2s ease"
-      cursor="pointer"
-    >
-      <Box
-        position="absolute"
-        top={1}
-        left={checked ? 5 : 1}
-        w={3}
-        h={3}
-        borderRadius="full"
-        backgroundColor={checked ? 'white' : darkMode ? 'white' : 'white'}
-        transition="left 0.2s ease"
-        boxShadow="sm"
-      />
-    </Box>
-  )
-}
+// DevModeSwitch is provided by AccountMenu
 
 export default function ChatPage() {
   const { resolvedTheme, setTheme } = useTheme()
@@ -752,122 +714,13 @@ export default function ChatPage() {
           p={3}
           bg={darkMode ? '#1f1f1f' : '#ffffff'}
         >
-          <MenuRoot
-            open={accountMenuOpen}
-            onOpenChange={(e) => setAccountMenuOpen(e.open)}
-
-          >
-            <MenuTrigger asChild>
-              <Box
-                cursor="pointer"
-                _hover={{
-                  backgroundColor: darkMode ? 'gray.700' : 'gray.100',
-                }}
-                borderRadius="md"
-                p={2}
-                mx={-2}
-                transition="background-color 0.2s"
-              >
-                <HStack gap={3} align="center">
-                  <Box flex={1} minW={0}>
-                    <Text 
-                      fontSize="sm" 
-                      fontWeight="medium" 
-                      overflow="hidden" 
-                      textOverflow="ellipsis" 
-                      whiteSpace="nowrap"
-                      color={pageFg}
-                    >
-                      {session?.user?.email || 'No email'}
-                    </Text>
-                  </Box>
-                  <Box 
-                    w={8} 
-                    h={8} 
-                    borderRadius="full" 
-                    backgroundColor={darkMode ? 'gray.300' : 'gray.300'}
-                    display="flex" 
-                    alignItems="center" 
-                    justifyContent="center"
-                  >
-                    <Settings 
-                      size={16} 
-                      color={darkMode ? 'black' : 'black'} 
-                    />
-                  </Box>
-                </HStack>
-              </Box>
-            </MenuTrigger>
-            <Portal>
-              <MenuPositioner>
-                <MenuContent
-                  bg={darkMode ? '#2a2a2a' : '#ffffff'}
-                  borderColor={borderCol}
-                  borderWidth="1px"
-                  borderRadius="md"
-                  minW="200px"
-                  shadow="lg"
-                >
-                  <MenuItem
-                    value="theme"
-                    onPointerDown={handleThemeToggle}
-                    color={darkMode ? 'white' : 'black'}
-                    _hover={{
-                      backgroundColor: darkMode ? 'gray.600' : 'gray.100',
-                    }}
-                  >
-                    <HStack gap={2}>
-                      {darkMode ? <Sun size={16} /> : <Moon size={16} />}
-                      <Text>{darkMode ? 'Light mode' : 'Dark mode'}</Text>
-                    </HStack>
-                  </MenuItem>
-                  <MenuItem
-                    value="signout"
-                    onClick={handleSignOut}
-                    disabled={isSigningOut}
-                    color={darkMode ? 'white' : 'black'}
-                    _hover={{
-                      backgroundColor: darkMode ? 'gray.600' : 'gray.100',
-                    }}
-                  >
-                    <HStack gap={2}>
-                      <LogOut size={16} />
-                      <Text>{isSigningOut ? 'Signing out...' : 'Sign out'}</Text>
-                    </HStack>
-                  </MenuItem>
-                  {devMode && (
-                    <MenuItem
-                      value="admin"
-                      disabled
-                      color={darkMode ? 'white' : 'black'}
-                      _hover={{
-                        backgroundColor: darkMode ? 'gray.600' : 'gray.100',
-                      }}
-                    >
-                      <HStack gap={2}>
-                        <Settings size={16} />
-                        <Text>Admin</Text>
-                      </HStack>
-                    </MenuItem>
-                  )}
-                  {session?.user?.email === 'thejuan.codes@gmail.com' && (
-                    <MenuItem
-                      value="devmode"
-                      color={darkMode ? 'white' : 'black'}
-                      _hover={{
-                        backgroundColor: darkMode ? 'gray.600' : 'gray.100',
-                      }}
-                    >
-                      <HStack gap={2} justify="space-between" align="center" w="full">
-                        <Text>{'DEV MODE'}</Text>
-                        <DevModeSwitch checked={devMode} onToggle={handleDevModeToggle} darkMode={darkMode} />
-                      </HStack>
-                    </MenuItem>
-                  )}
-                </MenuContent>
-              </MenuPositioner>
-            </Portal>
-          </MenuRoot>
+          <AccountMenu
+            darkMode={darkMode}
+            pageFg={pageFg}
+            borderCol={borderCol}
+            devMode={devMode}
+            onToggleDevMode={handleDevModeToggle}
+          />
         </Box>
       </Box>
 
@@ -963,122 +816,14 @@ export default function ChatPage() {
               bg={darkMode ? '#1f1f1f' : '#ffffff'}
               flexShrink={0}
             >
-              <MenuRoot
-                open={accountMenuOpen}
-                onOpenChange={(e) => setAccountMenuOpen(e.open)}
-    
-              >
-                <MenuTrigger asChild>
-                  <Box
-                    cursor="pointer"
-                    _hover={{
-                      backgroundColor: darkMode ? 'gray.700' : 'gray.100',
-                    }}
-                    borderRadius="md"
-                    p={2}
-                    mx={-2}
-                    transition="background-color 0.2s"
-                  >
-                    <HStack gap={3} align="center">
-                      <Box flex={1} minW={0}>
-                        <Text 
-                          fontSize="sm" 
-                          fontWeight="medium" 
-                          overflow="hidden" 
-                          textOverflow="ellipsis" 
-                          whiteSpace="nowrap"
-                          color={pageFg}
-                        >
-                          {session?.user?.email || 'No email'}
-                        </Text>
-                      </Box>
-                      <Box 
-                        w={8} 
-                        h={8} 
-                        borderRadius="full" 
-                        backgroundColor={darkMode ? 'gray.300' : 'gray.300'}
-                        display="flex" 
-                        alignItems="center" 
-                        justifyContent="center"
-                      >
-                        <Settings 
-                          size={16} 
-                          color={darkMode ? 'black' : 'black'} 
-                        />
-                      </Box>
-                    </HStack>
-                  </Box>
-                </MenuTrigger>
-                <Portal>
-                  <MenuPositioner>
-                    <MenuContent
-                      bg={darkMode ? '#2a2a2a' : '#ffffff'}
-                      borderColor={borderCol}
-                      borderWidth="1px"
-                      borderRadius="md"
-                      minW="200px"
-                      shadow="lg"
-                    >
-                      <MenuItem
-                        value="theme"
-                        onPointerDown={handleThemeToggle}
-                        color={darkMode ? 'white' : 'black'}
-                        _hover={{
-                          backgroundColor: darkMode ? 'gray.600' : 'gray.100',
-                        }}
-                      >
-                        <HStack gap={2}>
-                          {darkMode ? <Sun size={16} /> : <Moon size={16} />}
-                          <Text>{darkMode ? 'Light mode' : 'Dark mode'}</Text>
-                        </HStack>
-                      </MenuItem>
-                      <MenuItem
-                        value="signout"
-                        onClick={handleSignOut}
-                        disabled={isSigningOut}
-                        color={darkMode ? 'white' : 'black'}
-                        _hover={{
-                          backgroundColor: darkMode ? 'gray.600' : 'gray.100',
-                        }}
-                      >
-                        <HStack gap={2}>
-                          <LogOut size={16} />
-                          <Text>{isSigningOut ? 'Signing out...' : 'Sign out'}</Text>
-                        </HStack>
-                      </MenuItem>
-                      {devMode && (
-                        <MenuItem
-                          value="admin"
-                          disabled
-                          color={darkMode ? 'white' : 'black'}
-                          _hover={{
-                            backgroundColor: darkMode ? 'gray.600' : 'gray.100',
-                          }}
-                        >
-                          <HStack gap={2}>
-                            <Settings size={16} />
-                            <Text>Admin</Text>
-                          </HStack>
-                        </MenuItem>
-                      )}
-                      {session?.user?.email === 'thejuan.codes@gmail.com' && (
-                        <MenuItem
-                          value="devmode"
-                          color={darkMode ? 'white' : 'black'}
-                          _hover={{
-                            backgroundColor: darkMode ? 'gray.600' : 'gray.100',
-                          }}
-                        >
-                          <HStack gap={2} justify="space-between" align="center" w="full">
-                            <Text>{'DEV MODE'}</Text>
-                            <DevModeSwitch checked={devMode} onToggle={handleDevModeToggle} darkMode={darkMode} />
-                          </HStack>
-                        </MenuItem>
-                      )}
-                    </MenuContent>
-                  </MenuPositioner>
-                </Portal>
-              </MenuRoot>
+              <AccountMenu
+                darkMode={darkMode}
+                pageFg={pageFg}
+                borderCol={borderCol}
+                devMode={devMode}
+                onToggleDevMode={handleDevModeToggle}
+                onAdminNavigate={() => setSidebarOpen(false)}
+              />
             </Box>
           </Box>
         </Box>
