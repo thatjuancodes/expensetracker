@@ -835,6 +835,21 @@ export default function ChatPage() {
                       <Text>{isSigningOut ? 'Signing out...' : 'Sign out'}</Text>
                     </HStack>
                   </MenuItem>
+                  {devMode && (
+                    <MenuItem
+                      value="admin"
+                      disabled
+                      color={darkMode ? 'white' : 'black'}
+                      _hover={{
+                        backgroundColor: darkMode ? 'gray.600' : 'gray.100',
+                      }}
+                    >
+                      <HStack gap={2}>
+                        <Settings size={16} />
+                        <Text>Admin</Text>
+                      </HStack>
+                    </MenuItem>
+                  )}
                   {session?.user?.email === 'thejuan.codes@gmail.com' && (
                     <MenuItem
                       value="devmode"
@@ -1031,6 +1046,21 @@ export default function ChatPage() {
                           <Text>{isSigningOut ? 'Signing out...' : 'Sign out'}</Text>
                         </HStack>
                       </MenuItem>
+                      {devMode && (
+                        <MenuItem
+                          value="admin"
+                          disabled
+                          color={darkMode ? 'white' : 'black'}
+                          _hover={{
+                            backgroundColor: darkMode ? 'gray.600' : 'gray.100',
+                          }}
+                        >
+                          <HStack gap={2}>
+                            <Settings size={16} />
+                            <Text>Admin</Text>
+                          </HStack>
+                        </MenuItem>
+                      )}
                       {session?.user?.email === 'thejuan.codes@gmail.com' && (
                         <MenuItem
                           value="devmode"
