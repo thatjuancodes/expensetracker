@@ -208,11 +208,32 @@ export default function AdminPage() {
             const mapOne = (obj: Record<string, unknown>): SimpleExpense | null => {
               const id = (obj.id as string) ?? ''
               if (!id) return null
-              const date = (obj.date as string) ?? (obj.created_at as string) ?? (obj.createdAt as string)
-              const amount = (obj.amount as number | string) ?? (obj.total as number | string) ?? (obj.value as number | string)
+              const date =
+                (obj.date as string) ||
+                (obj.timestamp as string) ||
+                (obj.created_at as string) ||
+                (obj.createdAt as string)
+              const rawAmount =
+                (obj.amount as number | string) ??
+                (obj.total as number | string) ??
+                (obj.total_amount as number | string) ??
+                (obj.value as number | string)
+              const currency = (obj.currency as string) || undefined
+              const amount = currency != null && rawAmount != null ? `${rawAmount} ${currency}` : rawAmount
               const category = (obj.category as string) ?? null
-              const merchant = (obj.merchant as string) ?? (obj.vendor as string) ?? (obj.payee as string) ?? null
-              const note = (obj.note as string) ?? (obj.description as string) ?? (obj.memo as string) ?? null
+              const merchant =
+                (obj.merchant as string) ??
+                (obj.vendor as string) ??
+                (obj.payee as string) ??
+                (obj.provider as string) ??
+                null
+              const note =
+                (obj.note as string) ??
+                (obj.notes as string) ??
+                (obj.description as string) ??
+                (obj.name as string) ??
+                (obj.memo as string) ??
+                null
               return { id: String(id), date, amount, category, merchant, note }
             }
 
@@ -237,11 +258,42 @@ export default function AdminPage() {
               const obj = data as Record<string, unknown>
               if (Array.isArray(obj.expenses)) return mapMany(obj.expenses as unknown[])
               if (Array.isArray(obj.data)) return mapMany(obj.data as unknown[])
+              const single = mapOne(obj)
+              if (single) return [single]
             }
             return []
           }
 
-          const list = normalizeExpenses(payload)
+          let list = normalizeExpenses(payload)
+          if ((!list || list.length === 0) && Array.isArray(payload) && payload.length > 0) {
+            list = (payload as unknown[]).map((item, idx) => {
+              const o = (item ?? {}) as Record<string, unknown>
+              const id = String((o.id as unknown) ?? idx)
+              const date = (o.timestamp as string) || (o.created_at as string) || (o.date as string)
+              const amt =
+                (o.total_amount as number | string) ??
+                (o.amount as number | string) ??
+                (o.total as number | string) ??
+                (o.value as number | string)
+              const currency = (o.currency as string) || undefined
+              const amount = currency != null && amt != null ? `${amt} ${currency}` : amt
+              const category = (o.category as string) ?? null
+              const merchant =
+                (o.provider as string) ??
+                (o.merchant as string) ??
+                (o.vendor as string) ??
+                (o.payee as string) ??
+                null
+              const note =
+                (o.notes as string) ??
+                (o.description as string) ??
+                (o.name as string) ??
+                (o.note as string) ??
+                (o.memo as string) ??
+                null
+              return { id, date, amount, category, merchant, note }
+            })
+          }
           return list
         })()
 
