@@ -116,25 +116,28 @@ export default function AccountMenu(props: AccountMenuProps) {
               >
                 <HStack gap={2} justify="space-between" align="center" w="full">
                   <Text>Voice</Text>
-                  <Box
-                    as="select"
+                  <select
                     value={selectedVoiceUri ?? ''}
-                    onChange={(e: React.ChangeEvent<HTMLSelectElement>) => onSelectVoiceUri?.(e.target.value)}
-                    onClick={(e: React.MouseEvent) => e.stopPropagation()}
-                    onPointerDown={(e: React.PointerEvent) => e.stopPropagation()}
-                    onKeyDown={(e: React.KeyboardEvent) => e.stopPropagation()}
-                    bg={darkMode ? 'gray.700' : 'gray.200'}
-                    color={darkMode ? 'white' : 'black'}
-                    borderRadius="md"
-                    px={2}
-                    py={1}
+                    onChange={(e) => onSelectVoiceUri?.(e.target.value)}
+                    onClick={(e) => e.stopPropagation()}
+                    onPointerDown={(e) => e.stopPropagation()}
+                    onKeyDown={(e) => e.stopPropagation()}
+                    style={{
+                      backgroundColor: darkMode ? '#4A5568' : '#E2E8F0',
+                      color: darkMode ? 'white' : 'black',
+                      borderRadius: 6,
+                      padding: '4px 8px',
+                      border: 'none',
+                      outline: 'none',
+                      maxWidth: 200,
+                    }}
                   >
                     {(voiceOptions ?? []).map((opt) => (
-                      <Box as="option" key={opt.uri} value={opt.uri} color={darkMode ? 'white' : 'black'}>
+                      <option key={opt.uri} value={opt.uri}>
                         {opt.label}
-                      </Box>
+                      </option>
                     ))}
-                  </Box>
+                  </select>
                 </HStack>
               </MenuItem>
             )}
