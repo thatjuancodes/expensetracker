@@ -20,15 +20,19 @@ import {
   MenuItem,
   MenuPositioner,
   Portal,
+  TooltipRoot,
+  TooltipTrigger,
+  TooltipContent,
 } from '@chakra-ui/react'
 import { env } from '../config/env'
-import { Menu as MenuIcon, ChevronsLeft, ChevronsRight, Edit2, Trash2, MoreVertical } from 'lucide-react'
+import { Menu as MenuIcon, ChevronsLeft, ChevronsRight, Edit2, Trash2, MoreVertical, Volume2 } from 'lucide-react'
 
 import ResponsiveImage from '../components/ui/ResponsiveImage'
 import AccountMenu from '../components/layout/AccountMenu'
 import { useTheme } from 'next-themes'
 import { n8nClient } from '../service/api/n8n'
 import { useAuth } from '../contexts/AuthContext'
+import { useSpeechSynthesis } from '../hooks/useSpeechSynthesis'
 
 type ChatRole = 'user' | 'assistant'
 
@@ -55,6 +59,7 @@ function MessageBubble(props: { message: ChatMessage; messageBubbleMaxW: any; me
   const { message, messageBubbleMaxW, messageBubbleP, messageBubbleFontSize, imageGap } = props
 
   const isUser = message.role === 'user'
+  const { supported, speaking, speak, stop } = useSpeechSynthesis()
 
   return (
     <Flex justify={isUser ? 'flex-end' : 'flex-start'}>
@@ -87,6 +92,28 @@ function MessageBubble(props: { message: ChatMessage; messageBubbleMaxW: any; me
             >
               {message.content}
             </ReactMarkdown>
+            <Flex mt={2} justify="flex-end">
+              <TooltipRoot openDelay={200} closeDelay={100} disabled={supported}>
+                <TooltipTrigger asChild>
+                  <IconButton
+                    aria-label={speaking ? 'Stop reading' : 'Read aloud'}
+                    size="xs"
+                    variant="ghost"
+                    backgroundColor={speaking ? 'blue.500' : 'gray.300'}
+                    color={speaking ? 'white' : 'black'}
+                    onClick={() => {
+                      if (!supported) return
+                      if (speaking) stop()
+                      else speak(message.content)
+                    }}
+                    disabled={!supported}
+                  >
+                    <Volume2 size={14} />
+                  </IconButton>
+                </TooltipTrigger>
+                <TooltipContent>Text-to-speech not supported</TooltipContent>
+              </TooltipRoot>
+            </Flex>
           </Box>
         )}
         {message.images && message.images.length > 0 && (
