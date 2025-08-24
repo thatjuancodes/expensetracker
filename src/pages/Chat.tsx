@@ -22,7 +22,7 @@ import {
   Portal,
 } from '@chakra-ui/react'
 import { env } from '../config/env'
-import { Moon, Sun, Menu as MenuIcon, ChevronsLeft, ChevronsRight, Edit2, Trash2, MoreVertical, Settings, LogOut } from 'lucide-react'
+import { Menu as MenuIcon, ChevronsLeft, ChevronsRight, Edit2, Trash2, MoreVertical } from 'lucide-react'
 
 import ResponsiveImage from '../components/ui/ResponsiveImage'
 import AccountMenu from '../components/layout/AccountMenu'
@@ -110,8 +110,8 @@ function MessageBubble(props: { message: ChatMessage; messageBubbleMaxW: any; me
 // DevModeSwitch is provided by AccountMenu
 
 export default function ChatPage() {
-  const { resolvedTheme, setTheme } = useTheme()
-  const { session, signOut } = useAuth()
+  const { resolvedTheme } = useTheme()
+  const { session } = useAuth()
   const darkMode = resolvedTheme === 'dark'
   const pageBg = darkMode ? '#2e2e2e' : '#f4f4f4'
   const pageFg = darkMode ? 'white' : 'gray.900'
@@ -191,8 +191,7 @@ export default function ChatPage() {
   
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(false)
-  const [accountMenuOpen, setAccountMenuOpen] = useState<boolean>(false)
-  const [isSigningOut, setIsSigningOut] = useState<boolean>(false)
+  
   const [devMode, setDevMode] = useState(() => {
     const saved = localStorage.getItem('devMode')
     return saved ? JSON.parse(saved) : false
@@ -206,23 +205,7 @@ export default function ChatPage() {
     })
   }
 
-  const handleSignOut = async () => {
-    try {
-      setIsSigningOut(true)
-      setAccountMenuOpen(false)
-      await signOut()
-    } catch (error) {
-      console.error('Error signing out:', error)
-    } finally {
-      setIsSigningOut(false)
-    }
-  }
-
-  const handleThemeToggle = (e: React.MouseEvent) => {
-    e.preventDefault()
-    e.stopPropagation()
-    setTheme(darkMode ? 'light' : 'dark')
-  }
+  
 
   function extractN8nText(payload: unknown): string {
     // Handle array of items: [{ output: string }] or [{ json: { output: string } }]
@@ -492,6 +475,7 @@ export default function ChatPage() {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
+            userId: session?.user?.id || 'anonymous',
             messages: [{ role: 'user', content: userMessage.content }],
           }),
         })
