@@ -1,13 +1,11 @@
 import { useState, useEffect } from 'react'
 import {
   Box,
-  Container,
   Flex,
   Heading,
   IconButton,
   Stack,
   Text,
-  useBreakpointValue,
   Button,
   Grid,
   HStack,
@@ -128,7 +126,6 @@ interface IncomeItem {
 
 export default function Dashboard() {
   // const { resolvedTheme } = useTheme() // Temporarily removed
-  const darkMode = false
   const [activeTab, setActiveTab] = useState('overview')
   const [sidebarOpen, setSidebarOpen] = useState(false)
   
@@ -140,7 +137,6 @@ export default function Dashboard() {
     return ChatStorage.getCurrentThreadId()
   })
   
-  const isMobile = useBreakpointValue({ base: true, md: false })
   
   // Get current thread
   const currentThread = threads.find((t) => t.id === (currentThreadId || threads[0]?.id)) ?? threads[0]
@@ -218,10 +214,6 @@ export default function Dashboard() {
       status: 'pending'
     }
   ]
-
-  const handleGoBack = () => {
-    window.location.hash = '#/'
-  }
 
   const handleOpenSidebar = () => {
     setSidebarOpen(true)
@@ -394,7 +386,7 @@ export default function Dashboard() {
 
         {/* Expense Stats */}
         <Box px={4} pb={4}>
-          <ExpenseStats spent={budgetData.spent} budget={budgetData.totalBudget} />
+          <ExpenseStats />
         </Box>
 
         {/* Tab Navigation */}

@@ -8,10 +8,6 @@ import {
 } from '@chakra-ui/react'
 // import { useTheme } from 'next-themes' // Temporarily removed
 
-interface ExpenseStatsProps {
-  spent: number
-  budget: number
-}
 
 interface Category {
   name: string
@@ -20,7 +16,7 @@ interface Category {
   percentage: number
 }
 
-export function ExpenseStats({ spent, budget }: ExpenseStatsProps) {
+export function ExpenseStats() {
   const categories: Category[] = [
     { name: 'Food', amount: 456, color: 'blue.500', percentage: 21 },
     { name: 'Utilities', amount: 389, color: 'green.500', percentage: 18 },

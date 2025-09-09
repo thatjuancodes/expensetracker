@@ -29,14 +29,6 @@ const categoryIcons: { [key: string]: string } = {
   'Health': '❤️'
 }
 
-const categoryColors: { [key: string]: { bg: string; color: string } } = {
-  'Entertainment': { bg: 'purple.100', color: 'purple.600' },
-  'Utilities': { bg: 'yellow.100', color: 'yellow.600' },
-  'Food': { bg: 'green.100', color: 'green.600' },
-  'Transportation': { bg: 'blue.100', color: 'blue.600' },
-  'Shopping': { bg: 'pink.100', color: 'pink.600' },
-  'Health': { bg: 'red.100', color: 'red.600' }
-}
 
 export function BillsList({ bills }: BillsListProps) {
   const getCategoryIcon = (category: string) => {
