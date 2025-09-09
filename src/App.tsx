@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import ChatPage from './pages/Chat'
 import AuthGuard from './components/auth/AuthGuard'
 import AdminPage from './pages/Admin'
+import Dashboard from './pages/Dashboard'
 
 function useHashRoute() {
   const [hash, setHash] = useState<string>(() => window.location.hash || '#/')
@@ -21,7 +22,12 @@ export default function App() {
 
   return (
     <AuthGuard>
-      {route.startsWith('/admin') ? <AdminPage /> : <ChatPage />}
+      {route.startsWith('/admin') 
+        ? <AdminPage /> 
+        : route.startsWith('/dashboard') 
+        ? <Dashboard /> 
+        : <ChatPage />
+      }
     </AuthGuard>
   )
 }

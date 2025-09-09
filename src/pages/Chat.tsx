@@ -1478,6 +1478,27 @@ export default function ChatPage() {
           )}
         </Box>
 
+        {/* Dashboard Navigation */}
+        <Box
+          position="absolute"
+          bottom={20}
+          left={0}
+          right={0}
+          p={3}
+        >
+          <Button
+            onClick={() => window.location.hash = '#/dashboard'}
+            w="full"
+            backgroundColor="blue.500"
+            color="white"
+            _hover={{ backgroundColor: 'blue.600' }}
+            borderRadius="lg"
+            size="sm"
+          >
+            📊 Dashboard
+          </Button>
+        </Box>
+
         {/* Account Information Section */}
         <Box 
           position="absolute" 
@@ -1699,6 +1720,24 @@ export default function ChatPage() {
                   </Stack>
                 </Box>
               )}
+            </Box>
+
+            {/* Dashboard Navigation - Mobile */}
+            <Box p={3} flexShrink={0}>
+              <Button
+                onClick={() => {
+                  window.location.hash = '#/dashboard'
+                  setSidebarOpen(false)
+                }}
+                w="full"
+                backgroundColor="blue.500"
+                color="white"
+                _hover={{ backgroundColor: 'blue.600' }}
+                borderRadius="lg"
+                size="sm"
+              >
+                📊 Dashboard
+              </Button>
             </Box>
 
             {/* Account Information Section - Mobile */}
