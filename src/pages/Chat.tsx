@@ -24,8 +24,9 @@ import {
   TooltipTrigger,
   TooltipContent,
 } from '@chakra-ui/react'
+// Using lucide-react icons for consistency
 import { env } from '../config/env'
-import { Menu as MenuIcon, ChevronsLeft, ChevronsRight, Edit2, Trash2, MoreVertical, Volume2 } from 'lucide-react'
+import { Menu as MenuIcon, ChevronsLeft, ChevronsRight, Edit2, Trash2, MoreVertical, Volume2, Camera, Mic } from 'lucide-react'
 
 import ResponsiveImage from '../components/ui/ResponsiveImage'
 import AccountMenu from '../components/layout/AccountMenu'
@@ -458,6 +459,25 @@ export default function ChatPage() {
   const handleSelectVoiceUri = (uri: string) => {
     setVoiceUri(uri || undefined)
     localStorage.setItem('talkVoiceUri', JSON.stringify(uri || ''))
+  }
+
+  // Auto-send photos when selected in talk mode
+  async function onSelectImagesAutoSend(files: FileList | null) {
+    if (!files || files.length === 0) return
+    
+    // Process images the same way as regular selection
+    await onSelectImages(files)
+    
+    // If in talk mode, automatically send after a short delay
+    if (talkMode) {
+      setTimeout(async () => {
+        // Check if we have any images processed and ready
+        const currentImages = images.length > 0 ? images : []
+        if (currentImages.length > 0 || input.trim().length > 0) {
+          await handleSend()
+        }
+      }, 500) // Small delay to ensure images are processed
+    }
   }
 
   const handleDevModeToggle = () => {
@@ -1691,9 +1711,9 @@ export default function ChatPage() {
           </Container>
         </Box>
 
-        <Box borderTopWidth="1px" bg={pageBg} position="sticky" bottom={0}>
-          <Container maxW="4xl" py={inputContainerPy} px={inputContainerPx}>
-            <Stack gap={3}>
+        <Box borderTopWidth={talkMode && isMobile ? "0" : "1px"} bg={talkMode && isMobile ? "transparent" : pageBg} position="sticky" bottom={0}>
+          <Container maxW="4xl" py={talkMode && isMobile ? 0 : inputContainerPy} px={talkMode && isMobile ? 0 : inputContainerPx}>
+            <Stack gap={talkMode && isMobile ? 0 : 3}>
             {images.length > 0 && (
               <HStack gap={inputGap} wrap="wrap">
                 {images.map((src, idx) => (
@@ -1778,28 +1798,133 @@ export default function ChatPage() {
                 </Box>
               </HStack>
             )}
-              <Textarea
-                placeholder="How can I help you today?"
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyDown={handleKeyDown}
-                resize="none"
-                rows={textareaRows}
-                disabled={isSending}
-                bg={pageBg}
-                color={pageFg}
-                borderColor={borderCol}
-                fontSize={textareaFontSize}
-                minH={textareaMinH}
-                _placeholder={{ color: placeholderCol }}
-                shadow="sm"
-                _focus={{
-                  borderColor: darkMode ? 'blue.400' : 'blue.500',
-                  boxShadow: `0 0 0 1px ${darkMode ? '#63b3ed' : '#3182ce'}`
-                }}
-              />
+              {!talkMode && (
+                <Textarea
+                  placeholder="How can I help you today?"
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  resize="none"
+                  rows={textareaRows}
+                  disabled={isSending}
+                  bg={pageBg}
+                  color={pageFg}
+                  borderColor={borderCol}
+                  fontSize={textareaFontSize}
+                  minH={textareaMinH}
+                  _placeholder={{ color: placeholderCol }}
+                  shadow="sm"
+                  _focus={{
+                    borderColor: darkMode ? 'blue.400' : 'blue.500',
+                    boxShadow: `0 0 0 1px ${darkMode ? '#63b3ed' : '#3182ce'}`
+                  }}
+                />
+              )}
             {isMobile ? (
-              <Stack gap={3}>
+              talkMode ? (
+                /* Talk Mode UI - Clean and minimal */
+                <Box position="relative" w="full" h="140px" bg="transparent">
+                  {/* Talk button - centered */}
+                  <Box position="absolute" top="40%" left="50%" transform="translate(-50%, -50%)">
+                    <IconButton
+                      aria-label="Hold to speak"
+                      onMouseDown={handleRecordingStart}
+                      onTouchStart={handleRecordingStart}
+                      borderRadius="full"
+                      size="2xl"
+                      w="100px"
+                      h="100px"
+                      backgroundColor={isRecording ? 'red.600' : (isAutoSending ? 'blue.500' : 'red.500')}
+                      color="white"
+                      border="2px solid"
+                      borderColor={isRecording ? 'red.400' : (isAutoSending ? 'blue.400' : 'red.400')}
+                      disabled={isSending || isAutoSending}
+                      transform={(isRecording || isAutoSending) ? 'scale(0.95)' : 'scale(1)'}
+                      transition="all 0.2s ease"
+                      _active={{
+                        transform: 'scale(0.9)'
+                      }}
+                      _hover={{
+                        transform: isRecording ? 'scale(0.95)' : 'scale(1.05)',
+                        backgroundColor: isRecording ? 'red.600' : 'red.600',
+                        borderColor: isRecording ? 'red.300' : 'red.300'
+                      }}
+                      userSelect="none"
+                      opacity={isAutoSending ? 0.8 : 1}
+                      shadow={isRecording ? 'lg' : 'md'}
+                      position="relative"
+                      overflow="hidden"
+                    >
+                      <Mic size={32} />
+                      
+                      {/* Pulsing ring animation when recording */}
+                      {isRecording && (
+                        <Box
+                          position="absolute"
+                          inset="-6px"
+                          borderRadius="full"
+                          border="2px solid"
+                          borderColor="red.300"
+                          animation="ping 1.5s cubic-bezier(0, 0, 0.2, 1) infinite"
+                        />
+                      )}
+                    </IconButton>
+                    
+                  </Box>
+                  
+                  {/* Status text below button - outside the button container */}
+                  <Text
+                    position="absolute"
+                    top="75%"
+                    left="50%"
+                    transform="translateX(-50%)"
+                    fontSize="sm"
+                    color={isRecording ? 'red.500' : (isAutoSending ? 'blue.500' : (darkMode ? 'gray.400' : 'gray.600'))}
+                    fontWeight="medium"
+                    textAlign="center"
+                    whiteSpace="nowrap"
+                  >
+                    {isAutoSending ? 'Sending...' : (isRecording ? 'Recording...' : 'Hold to speak')}
+                  </Text>
+
+                  {/* Photo selection button - positioned on the right */}
+                  <Box position="absolute" top="40%" right="20px" transform="translateY(-50%)">
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      style={{ display: 'none' }}
+                      onChange={(e) => onSelectImagesAutoSend(e.currentTarget.files)}
+                    />
+                    <IconButton
+                      aria-label="Select Photo"
+                      onClick={() => fileInputRef.current?.click()}
+                      borderRadius="full"
+                      size="lg"
+                      w="60px"
+                      h="60px"
+                      backgroundColor="gray.500"
+                      color="white"
+                      border="2px solid"
+                      borderColor="gray.400"
+                      _hover={{
+                        backgroundColor: 'gray.600',
+                        transform: 'scale(1.05)',
+                        borderColor: 'gray.300'
+                      }}
+                      _active={{
+                        transform: 'scale(0.95)'
+                      }}
+                      transition="all 0.2s ease"
+                      shadow="sm"
+                    >
+                      <Camera size={24} />
+                    </IconButton>
+                  </Box>
+                </Box>
+              ) : (
+                <Stack gap={3}>
                 {/* Input controls row 1 */}
                 <HStack gap={bottomHStackGap} wrap="wrap">
                   <input
@@ -1883,7 +2008,8 @@ export default function ChatPage() {
                     ➤ Send
                   </Button>
                 </HStack>
-              </Stack>
+                </Stack>
+              )
             ) : (
               <HStack justify="space-between" flexWrap={bottomFlexWrap} gap={bottomGap}>
                 <HStack gap={bottomHStackGap}>
