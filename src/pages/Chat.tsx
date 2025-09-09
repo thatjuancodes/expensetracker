@@ -55,6 +55,204 @@ function generateMessageId(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
 }
 
+// Storage management utilities
+class ChatStorage {
+  private static readonly MAX_STORAGE_SIZE = 5 * 1024 * 1024 // 5MB limit
+  private static readonly MAX_THREADS = 20 // Maximum number of threads to keep
+  private static readonly MAX_MESSAGES_PER_THREAD = 50 // Maximum messages per thread
+  private static readonly STORAGE_KEY = 'chatThreadsV1'
+  private static readonly CURRENT_THREAD_KEY = 'currentThreadIdV1'
+
+  static getStorageSize(): number {
+    let total = 0
+    for (let key in localStorage) {
+      if (localStorage.hasOwnProperty(key)) {
+        total += localStorage[key].length + key.length
+      }
+    }
+    return total
+  }
+
+  static isStorageNearLimit(): boolean {
+    return this.getStorageSize() > (this.MAX_STORAGE_SIZE * 0.8) // 80% of limit
+  }
+
+  static compressImage(dataUrl: string, maxWidth = 800, quality = 0.7): Promise<string> {
+    return new Promise((resolve) => {
+      const canvas = document.createElement('canvas')
+      const ctx = canvas.getContext('2d')
+      const img = new Image()
+      
+      img.onload = () => {
+        const ratio = Math.min(maxWidth / img.width, maxWidth / img.height)
+        canvas.width = img.width * ratio
+        canvas.height = img.height * ratio
+        
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
+          resolve(canvas.toDataURL('image/jpeg', quality))
+        } else {
+          resolve(dataUrl) // Fallback to original
+        }
+      }
+      
+      img.onerror = () => resolve(dataUrl) // Fallback to original
+      img.src = dataUrl
+    })
+  }
+
+  static async optimizeImages(images: string[]): Promise<string[]> {
+    const optimized: string[] = []
+    for (const image of images) {
+      if (image.startsWith('data:image/')) {
+        try {
+          const compressed = await this.compressImage(image)
+          optimized.push(compressed)
+        } catch {
+          optimized.push(image) // Keep original if compression fails
+        }
+      } else {
+        optimized.push(image)
+      }
+    }
+    return optimized
+  }
+
+  static trimThreads(threads: ChatThread[]): ChatThread[] {
+    // Sort by updatedAt descending and keep only MAX_THREADS
+    const sorted = threads.sort((a, b) => b.updatedAt - a.updatedAt)
+    return sorted.slice(0, this.MAX_THREADS)
+  }
+
+  static trimMessages(thread: ChatThread): ChatThread {
+    if (thread.messages.length <= this.MAX_MESSAGES_PER_THREAD) {
+      return thread
+    }
+
+    // Keep the first message (usually assistant greeting) and the latest messages
+    const firstMessage = thread.messages[0]
+    const recentMessages = thread.messages.slice(-this.MAX_MESSAGES_PER_THREAD + 1)
+    
+    return {
+      ...thread,
+      messages: [firstMessage, ...recentMessages]
+    }
+  }
+
+  static async saveThreads(threads: ChatThread[]): Promise<boolean> {
+    try {
+      // Optimize threads before saving
+      let optimizedThreads = this.trimThreads(threads)
+      optimizedThreads = optimizedThreads.map(thread => this.trimMessages(thread))
+
+      // Optimize images in messages
+      for (const thread of optimizedThreads) {
+        for (const message of thread.messages) {
+          if (message.images && message.images.length > 0) {
+            message.images = await this.optimizeImages(message.images)
+          }
+        }
+      }
+
+      const dataString = JSON.stringify(optimizedThreads)
+      
+      // Check if storage would exceed limit
+      if (dataString.length > this.MAX_STORAGE_SIZE) {
+        console.warn('Chat data too large, applying aggressive trimming')
+        // More aggressive trimming - keep only 10 threads and 20 messages each
+        optimizedThreads = optimizedThreads.slice(0, 10).map(thread => ({
+          ...thread,
+          messages: thread.messages.slice(-20)
+        }))
+      }
+
+      localStorage.setItem(this.STORAGE_KEY, JSON.stringify(optimizedThreads))
+      return true
+    } catch (error) {
+      console.error('Failed to save chat threads:', error)
+      
+      // Emergency cleanup - try to save just the current thread
+      try {
+        const currentId = localStorage.getItem(this.CURRENT_THREAD_KEY)
+        const currentThread = threads.find(t => t.id === currentId)
+        if (currentThread) {
+          const trimmed = this.trimMessages(currentThread)
+          localStorage.setItem(this.STORAGE_KEY, JSON.stringify([trimmed]))
+          return true
+        }
+      } catch {
+        // Complete failure - clear storage
+        localStorage.removeItem(this.STORAGE_KEY)
+      }
+      
+      return false
+    }
+  }
+
+  static loadThreads(): ChatThread[] {
+    try {
+      const saved = localStorage.getItem(this.STORAGE_KEY)
+      if (saved) {
+        const parsed = JSON.parse(saved) as ChatThread[]
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed
+        }
+      }
+    } catch (error) {
+      console.error('Failed to load chat threads:', error)
+      // Clear corrupted data
+      localStorage.removeItem(this.STORAGE_KEY)
+    }
+
+    // Return default thread
+    const initial: ChatThread = {
+      id: generateMessageId(),
+      title: 'New chat',
+      messages: [
+        {
+          id: generateMessageId(),
+          role: 'assistant',
+          content: "Hi! I'm your AI assistant. Ask me anything to get started.",
+        },
+      ],
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    }
+    return [initial]
+  }
+
+  static getCurrentThreadId(): string {
+    return localStorage.getItem(this.CURRENT_THREAD_KEY) || ''
+  }
+
+  static setCurrentThreadId(id: string): void {
+    localStorage.setItem(this.CURRENT_THREAD_KEY, id)
+  }
+
+  static getStorageInfo(): { used: number; limit: number; percentage: number } {
+    const used = this.getStorageSize()
+    const limit = this.MAX_STORAGE_SIZE
+    const percentage = Math.round((used / limit) * 100)
+    return { used, limit, percentage }
+  }
+
+  static exportChats(threads: ChatThread[]): string {
+    return JSON.stringify(threads, null, 2)
+  }
+
+  static importChats(jsonString: string): ChatThread[] | null {
+    try {
+      const parsed = JSON.parse(jsonString)
+      if (Array.isArray(parsed)) {
+        return parsed as ChatThread[]
+      }
+    } catch {
+      // Invalid JSON
+    }
+    return null
+  }
+}
+
 function MessageBubble(props: { message: ChatMessage; messageBubbleMaxW: any; messageBubbleP: any; messageBubbleFontSize: any; imageGap: any }) {
   const { message, messageBubbleMaxW, messageBubbleP, messageBubbleFontSize, imageGap } = props
   const { resolvedTheme } = useTheme()
@@ -169,33 +367,11 @@ export default function ChatPage() {
   const borderCol = darkMode ? 'gray.600' : 'gray.400'
   const placeholderCol = darkMode ? 'gray.300' : 'gray.600'
   const [threads, setThreads] = useState<ChatThread[]>(() => {
-    const saved = localStorage.getItem('chatThreadsV1')
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved) as ChatThread[]
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed
-      } catch {}
-    }
-    const initial: ChatThread = {
-      id: generateMessageId(),
-      title: 'New chat',
-      messages: [
-        {
-          id: generateMessageId(),
-          role: 'assistant',
-          content: "Hi! I'm your AI assistant. Ask me anything to get started.",
-        },
-      ],
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-    }
-    return [initial]
+    return ChatStorage.loadThreads()
   })
 
   const [currentThreadId, setCurrentThreadId] = useState<string>(() => {
-    const saved = localStorage.getItem('currentThreadIdV1')
-    if (saved) return saved
-    return ''
+    return ChatStorage.getCurrentThreadId()
   })
 
   const [input, setInput] = useState<string>('')
@@ -209,6 +385,7 @@ export default function ChatPage() {
   const audioChunksRef = useRef<Blob[]>([])
   const [cameraOpen, setCameraOpen] = useState<boolean>(false)
   const [, setCameraSupported] = useState<boolean>(true)
+  const [storageWarning, setStorageWarning] = useState<boolean>(false)
   const videoRef = useRef<HTMLVideoElement | null>(null)
   const streamRef = useRef<MediaStream | null>(null)
 
@@ -332,9 +509,19 @@ export default function ChatPage() {
   const canSendVoice = useMemo(() => !!audioFile && !isSending && !isRecording, [audioFile, isSending, isRecording])
 
   useEffect(() => {
-    // Persist threads & selection
-    localStorage.setItem('chatThreadsV1', JSON.stringify(threads))
-    if (currentThread?.id) localStorage.setItem('currentThreadIdV1', currentThread.id)
+    // Persist threads & selection with storage optimization
+    const saveData = async () => {
+      const success = await ChatStorage.saveThreads(threads)
+      if (!success) {
+        console.warn('Storage save failed - data may be too large')
+        // Could show user notification here
+      }
+      if (currentThread?.id) {
+        ChatStorage.setCurrentThreadId(currentThread.id)
+      }
+    }
+    
+    saveData()
   }, [threads, currentThread?.id])
 
   useEffect(() => {
@@ -373,8 +560,17 @@ export default function ChatPage() {
     setSidebarOpen(false)
   }
 
-  function onSelectImages(files: FileList | null) {
+  async function onSelectImages(files: FileList | null) {
     if (!files || files.length === 0) return
+    
+    // Check storage before processing images
+    if (ChatStorage.isStorageNearLimit()) {
+      const proceed = window.confirm(
+        'Storage is nearly full. Images will be compressed. Continue?'
+      )
+      if (!proceed) return
+    }
+    
     const tasks: Array<Promise<string>> = []
     Array.from(files).forEach((file) => {
       tasks.push(
@@ -385,7 +581,14 @@ export default function ChatPage() {
         }),
       )
     })
-    Promise.all(tasks).then((dataUris) => setImages((prev) => [...prev, ...dataUris]))
+    
+    const dataUris = await Promise.all(tasks)
+    // Optimize images if storage is getting full
+    const optimizedImages = ChatStorage.isStorageNearLimit() 
+      ? await ChatStorage.optimizeImages(dataUris)
+      : dataUris
+      
+    setImages((prev) => [...prev, ...optimizedImages])
   }
 
   function clearImages() {
@@ -713,6 +916,64 @@ export default function ChatPage() {
     })
   }
 
+  function exportChats() {
+    const dataStr = ChatStorage.exportChats(threads)
+    const dataBlob = new Blob([dataStr], { type: 'application/json' })
+    const url = URL.createObjectURL(dataBlob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `chat-export-${new Date().toISOString().split('T')[0]}.json`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+  }
+
+  function importChats() {
+    const input = document.createElement('input')
+    input.type = 'file'
+    input.accept = '.json'
+    input.onchange = (e) => {
+      const file = (e.target as HTMLInputElement).files?.[0]
+      if (file) {
+        const reader = new FileReader()
+        reader.onload = (e) => {
+          const content = e.target?.result as string
+          const imported = ChatStorage.importChats(content)
+          if (imported) {
+            const confirm = window.confirm(
+              `Import ${imported.length} chat threads? This will replace your current chats.`
+            )
+            if (confirm) {
+              setThreads(imported)
+              if (imported.length > 0) {
+                setCurrentThreadId(imported[0].id)
+              }
+            }
+          } else {
+            window.alert('Invalid chat file format.')
+          }
+        }
+        reader.readAsText(file)
+      }
+    }
+    input.click()
+  }
+
+  function clearOldChats() {
+    const confirm = window.confirm(
+      'Clear old chats to free up storage? This will keep only the 5 most recent chats.'
+    )
+    if (confirm) {
+      setThreads((prev) => {
+        const sorted = prev.sort((a, b) => b.updatedAt - a.updatedAt)
+        const kept = sorted.slice(0, 5)
+        return kept
+      })
+      setStorageWarning(false)
+    }
+  }
+
   const uploadUrl = devMode
     ? 'https://homemakr.app.n8n.cloud/webhook-test/upload'
     : 'https://homemakr.app.n8n.cloud/webhook/upload'
@@ -859,13 +1120,22 @@ export default function ChatPage() {
     // Check camera support on component mount
     const checkCameraSupport = () => {
       const hasUserMedia = !!(navigator.mediaDevices?.getUserMedia)
-      const isSecure = window.window.location.protocol === 'https:' || window.window.location.hostname === 'localhost'
+      const isSecure = window.location.protocol === 'https:' || window.location.hostname === 'localhost'
       setCameraSupported(hasUserMedia && isSecure)
     }
     
+    const checkStorage = () => {
+      setStorageWarning(ChatStorage.isStorageNearLimit())
+    }
+    
     checkCameraSupport()
+    checkStorage()
+    
+    // Check storage periodically
+    const storageInterval = setInterval(checkStorage, 30000) // Every 30 seconds
     
     return () => {
+      clearInterval(storageInterval)
       abortRef.current?.abort()
       // Ensure camera stream is closed on unmount
       if (streamRef.current) {
@@ -997,16 +1267,52 @@ export default function ChatPage() {
           </IconButton>
         </HStack>
 
+        {/* Storage Warning */}
+        {storageWarning && (
+          <Box p={3} bg="orange.100" borderBottomWidth="1px" borderColor={borderCol}>
+            <Text fontSize="xs" color="orange.800" fontWeight="medium">
+              ⚠️ Storage nearly full! Old chats may be automatically cleaned up.
+            </Text>
+          </Box>
+        )}
+
         <Box p={3}>
-          <Button
-            onClick={createNewThread}
-            backgroundColor={darkMode ? 'gray.700' : 'gray.300'}
-            color={darkMode ? 'white' : 'black'}
-            w="full"
-            mb={3}
-          >
-            New chat
-          </Button>
+          <Stack gap={2}>
+            <Button
+              onClick={createNewThread}
+              onDoubleClick={importChats}
+              backgroundColor={darkMode ? 'gray.700' : 'gray.300'}
+              color={darkMode ? 'white' : 'black'}
+              w="full"
+              title="Double-click to import chats"
+            >
+              New chat
+            </Button>
+            
+            {/* Storage management controls */}
+            {storageWarning && (
+              <HStack gap={1}>
+                <Button
+                  onClick={clearOldChats}
+                  size="xs"
+                  backgroundColor="orange.500"
+                  color="white"
+                  flex="1"
+                >
+                  Clear Old
+                </Button>
+                <Button
+                  onClick={exportChats}
+                  size="xs"
+                  backgroundColor={darkMode ? 'gray.600' : 'gray.400'}
+                  color={darkMode ? 'white' : 'black'}
+                  flex="1"
+                >
+                  Export
+                </Button>
+              </HStack>
+            )}
+          </Stack>
 
           <Stack gap={1} overflowY="auto" maxH="calc(100dvh - 240px)">
             {threads.map((t) => {
@@ -1117,17 +1423,44 @@ export default function ChatPage() {
               </IconButton>
             </HStack>
             <Box p={3} flex="1" display="flex" flexDirection="column" minH={0}>
-                <Button
-                  onClick={createNewThread}
-                  backgroundColor={darkMode ? 'gray.700' : 'gray.300'}
-                  color={darkMode ? 'white' : 'black'}
-                  w="full"
-                  mb={3}
-                  size="lg"
-                  minH="48px"
-                >
-                New chat
-              </Button>
+                <Stack gap={2}>
+                  <Button
+                    onClick={createNewThread}
+                    onDoubleClick={importChats}
+                    backgroundColor={darkMode ? 'gray.700' : 'gray.300'}
+                    color={darkMode ? 'white' : 'black'}
+                    w="full"
+                    size="lg"
+                    minH="48px"
+                    title="Double-click to import chats"
+                  >
+                    New chat
+                  </Button>
+                  
+                  {/* Storage management controls for mobile */}
+                  {storageWarning && (
+                    <HStack gap={1}>
+                      <Button
+                        onClick={clearOldChats}
+                        size="sm"
+                        backgroundColor="orange.500"
+                        color="white"
+                        flex="1"
+                      >
+                        Clear Old
+                      </Button>
+                      <Button
+                        onClick={exportChats}
+                        size="sm"
+                        backgroundColor={darkMode ? 'gray.600' : 'gray.400'}
+                        color={darkMode ? 'white' : 'black'}
+                        flex="1"
+                      >
+                        Export
+                      </Button>
+                    </HStack>
+                  )}
+                </Stack>
 
               <Stack gap={1} overflowY="auto" flex="1">
                 {threads.map((t) => {
