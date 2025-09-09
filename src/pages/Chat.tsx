@@ -208,6 +208,7 @@ export default function ChatPage() {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const audioChunksRef = useRef<Blob[]>([])
   const [cameraOpen, setCameraOpen] = useState<boolean>(false)
+  const [, setCameraSupported] = useState<boolean>(true)
   const videoRef = useRef<HTMLVideoElement | null>(null)
   const streamRef = useRef<MediaStream | null>(null)
 
@@ -450,20 +451,82 @@ export default function ChatPage() {
 
   async function openCamera() {
     try {
-      if (!navigator.mediaDevices?.getUserMedia) {
-        window.alert('Camera not supported in this browser')
+      // Check for HTTPS requirement
+      if (window.window.location.protocol !== 'https:' && window.window.location.hostname !== 'localhost') {
+        window.alert('Camera requires HTTPS connection. Please use a secure connection.')
         return
       }
-      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
+
+      if (!navigator.mediaDevices?.getUserMedia) {
+        // Fallback to file input if camera API not supported
+        window.alert('Camera API not supported. Please use "Choose Image" instead.')
+        return
+      }
+
+      // Try multiple camera constraint configurations for better Android compatibility
+      const constraintOptions = [
+        // Prefer rear camera with flexible constraints
+        { video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } } },
+        // Fallback to any rear camera
+        { video: { facingMode: 'environment' } },
+        // Fallback to front camera
+        { video: { facingMode: 'user' } },
+        // Fallback to any camera
+        { video: true }
+      ]
+
+      let stream = null
+      let lastError = null
+
+      for (const constraints of constraintOptions) {
+        try {
+          stream = await navigator.mediaDevices.getUserMedia(constraints)
+          break
+        } catch (err) {
+          lastError = err
+          console.warn('Camera constraint failed:', constraints, err)
+        }
+      }
+
+      if (!stream) {
+        // Handle specific error types
+        if (lastError instanceof Error) {
+          if (lastError.name === 'NotAllowedError') {
+            window.alert('Camera permission denied. Please allow camera access and try again.')
+          } else if (lastError.name === 'NotFoundError') {
+            window.alert('No camera found on this device. Please use "Choose Image" instead.')
+          } else if (lastError.name === 'NotReadableError') {
+            window.alert('Camera is busy or unavailable. Please close other apps using the camera and try again.')
+          } else {
+            window.alert(`Camera error: ${lastError.message}. Please try "Choose Image" instead.`)
+          }
+        } else {
+          window.alert('Unable to access camera. Please use "Choose Image" instead.')
+        }
+        return
+      }
+
       streamRef.current = stream
       if (videoRef.current) {
         videoRef.current.srcObject = stream
-        // Some browsers require play() to be called after setting srcObject
-        await videoRef.current.play().catch(() => {})
+        
+        // Enhanced play handling for mobile browsers
+        try {
+          // Set video attributes for better mobile support
+          videoRef.current.setAttribute('playsinline', 'true')
+          videoRef.current.setAttribute('autoplay', 'true')
+          videoRef.current.setAttribute('muted', 'true')
+          
+          await videoRef.current.play()
+        } catch (playError) {
+          console.warn('Video play failed:', playError)
+          // Continue anyway, many browsers will auto-play
+        }
       }
       setCameraOpen(true)
     } catch (err) {
-      window.alert('Unable to access camera. Please check permissions.')
+      console.error('Camera setup error:', err)
+      window.alert('Unexpected camera error. Please use "Choose Image" instead.')
     }
   }
 
@@ -477,18 +540,63 @@ export default function ChatPage() {
 
   async function capturePhoto() {
     const video = videoRef.current
-    if (!video) return
-    const width = video.videoWidth || 640
-    const height = video.videoHeight || 480
-    const canvas = document.createElement('canvas')
-    canvas.width = width
-    canvas.height = height
-    const ctx = canvas.getContext('2d')
-    if (!ctx) return
-    ctx.drawImage(video, 0, 0, width, height)
-    const dataUrl = canvas.toDataURL('image/jpeg', 0.9)
-    setImages((prev) => [...prev, dataUrl])
-    closeCamera()
+    if (!video) {
+      window.alert('Video not ready. Please wait for camera to load.')
+      return
+    }
+
+    try {
+      // Wait for video metadata to load if not ready
+      if (video.readyState < 2) {
+        await new Promise((resolve) => {
+          video.onloadedmetadata = resolve
+          setTimeout(resolve, 2000) // Timeout after 2 seconds
+        })
+      }
+
+      const width = video.videoWidth || 640
+      const height = video.videoHeight || 480
+      
+      if (width === 0 || height === 0) {
+        window.alert('Camera not ready. Please wait a moment and try again.')
+        return
+      }
+
+      const canvas = document.createElement('canvas')
+      canvas.width = width
+      canvas.height = height
+      const ctx = canvas.getContext('2d')
+      if (!ctx) {
+        window.alert('Unable to create image canvas.')
+        return
+      }
+
+      // Draw the video frame to canvas
+      ctx.drawImage(video, 0, 0, width, height)
+      
+      // Convert to blob for better mobile compatibility
+      canvas.toBlob((blob) => {
+        if (blob) {
+          const reader = new FileReader()
+          reader.onload = () => {
+            if (reader.result) {
+              setImages((prev) => [...prev, reader.result as string])
+              closeCamera()
+            }
+          }
+          reader.readAsDataURL(blob)
+        } else {
+          // Fallback to dataURL
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.9)
+          setImages((prev) => [...prev, dataUrl])
+          closeCamera()
+        }
+      }, 'image/jpeg', 0.9)
+      
+    } catch (err) {
+      console.error('Photo capture error:', err)
+      window.alert('Failed to capture photo. Please try again.')
+    }
   }
 
   async function handleSendVoice() {
@@ -748,6 +856,15 @@ export default function ChatPage() {
   }
 
   useEffect(() => {
+    // Check camera support on component mount
+    const checkCameraSupport = () => {
+      const hasUserMedia = !!(navigator.mediaDevices?.getUserMedia)
+      const isSecure = window.window.location.protocol === 'https:' || window.window.location.hostname === 'localhost'
+      setCameraSupported(hasUserMedia && isSecure)
+    }
+    
+    checkCameraSupport()
+    
     return () => {
       abortRef.current?.abort()
       // Ensure camera stream is closed on unmount
@@ -1098,8 +1215,37 @@ export default function ChatPage() {
                 w="full"
                 mx={2}
               >
-                <Box overflow="hidden" borderRadius="md">
-                  <video ref={videoRef} autoPlay playsInline muted style={{ width: '100%', height: 'auto' }} />
+                <Box overflow="hidden" borderRadius="md" position="relative">
+                  <video 
+                    ref={videoRef} 
+                    autoPlay 
+                    playsInline 
+                    muted 
+                    style={{ 
+                      width: '100%', 
+                      height: 'auto',
+                      maxHeight: '60vh',
+                      objectFit: 'cover'
+                    }} 
+                  />
+                  {/* Loading indicator for slow cameras */}
+                  <Box 
+                    position="absolute"
+                    top="50%"
+                    left="50%"
+                    transform="translate(-50%, -50%)"
+                    bg="blackAlpha.700"
+                    color="white"
+                    px={3}
+                    py={2}
+                    borderRadius="md"
+                    fontSize="sm"
+                    opacity={(videoRef.current?.readyState ?? 0) < 2 ? 1 : 0}
+                    transition="opacity 0.3s"
+                    pointerEvents="none"
+                  >
+                    Loading camera...
+                  </Box>
                 </Box>
                 <HStack justify="flex-end" mt={3}>
                   <Button onClick={closeCamera} backgroundColor={darkMode ? 'gray.700' : 'gray.300'} color={darkMode ? 'white' : 'black'}>
@@ -1257,8 +1403,18 @@ export default function ChatPage() {
                   >
                     📁 Choose
                   </Button>
+                  {/* Camera button with fallback */}
                   <Button
-                    onClick={() => void openCamera()}
+                    onClick={() => {
+                      // Check if camera API is available and supported
+                      if (!!navigator.mediaDevices?.getUserMedia && 
+                          (window.location.protocol === 'https:' || window.location.hostname === 'localhost')) {
+                        void openCamera()
+                      } else {
+                        // Fallback to file input with camera capture
+                        cameraInputRef.current?.click()
+                      }
+                    }}
                     size={buttonSize}
                     minH={buttonMinH}
                     flex="1"
@@ -1350,8 +1506,18 @@ export default function ChatPage() {
                   >
                     Choose Image
                   </Button>
+                  {/* Camera button with fallback */}
                   <Button
-                    onClick={() => void openCamera()}
+                    onClick={() => {
+                      // Check if camera API is available and supported
+                      if (!!navigator.mediaDevices?.getUserMedia && 
+                          (window.location.protocol === 'https:' || window.location.hostname === 'localhost')) {
+                        void openCamera()
+                      } else {
+                        // Fallback to file input with camera capture
+                        cameraInputRef.current?.click()
+                      }
+                    }}
                     size={buttonSize}
                     minH={buttonMinH}
                     backgroundColor={darkMode ? 'gray.700' : 'gray.300'}
