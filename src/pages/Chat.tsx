@@ -1298,8 +1298,9 @@ export default function ChatPage() {
         as="aside"
         display={{ base: 'none', md: sidebarCollapsed ? 'none' : 'block' }}
         borderRightWidth="1px"
+        borderRightColor={darkMode ? 'gray.600' : 'gray.200'}
         bg={darkMode ? '#1f1f1f' : '#ffffff'}
-        w={72}
+        w={80}
         h="100vh"
         transition="width 0.2s ease"
         overflowX="hidden"
@@ -1308,28 +1309,36 @@ export default function ChatPage() {
         left={0}
         zIndex={5}
       >
-        {/* App Title and Description */}
-        <Box p={3} borderBottomWidth="1px" borderColor={borderCol}>
-          <Stack gap={1}>
-            <Heading size="sm" color={pageFg}>{env.appName}</Heading>
-            <Text fontSize="xs" color={darkMode ? 'gray.300' : 'gray.600'}>
-              Chat-style interface to help manage and track your expenses.
-            </Text>
-          </Stack>
-        </Box>
-
-        <HStack justify="space-between" p={3} borderBottomWidth="1px">
-          <Heading size="sm">Chat History</Heading>
-          <IconButton
-            aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-            variant="ghost"
-            backgroundColor={darkMode ? 'gray.700' : 'gray.300'}
-            color={darkMode ? 'white' : 'black'}
-            onClick={() => setSidebarCollapsed((v) => !v)}
+        {/* Drawer Header */}
+        <Box p={4} borderBottomWidth="1px" borderBottomColor={darkMode ? 'gray.600' : 'gray.200'}>
+          <Flex justify="space-between" align="center" mb={3}>
+            <Heading size="md" color={pageFg}>Chat History</Heading>
+            <IconButton
+              aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+              variant="ghost"
+              backgroundColor={darkMode ? 'gray.700' : 'gray.100'}
+              color={darkMode ? 'white' : 'gray.600'}
+              _hover={{ backgroundColor: darkMode ? 'gray.600' : 'gray.200' }}
+              borderRadius="full"
+              onClick={() => setSidebarCollapsed((v) => !v)}
+            >
+              {sidebarCollapsed ? <ChevronsRight size={16} /> : <ChevronsLeft size={16} />}
+            </IconButton>
+          </Flex>
+          <Button
+            onClick={createNewThread}
+            onDoubleClick={importChats}
+            w="full"
+            backgroundColor="blue.500"
+            color="white"
+            _hover={{ backgroundColor: 'blue.600' }}
+            borderRadius="lg"
+            title="Double-click to import chats"
           >
-            {sidebarCollapsed ? <ChevronsRight size={18} /> : <ChevronsLeft size={18} />}
-          </IconButton>
-        </HStack>
+            <Text mr={2}>+</Text>
+            New Chat
+          </Button>
+        </Box>
 
         {/* Storage Warning */}
         {storageWarning && (
@@ -1340,73 +1349,133 @@ export default function ChatPage() {
           </Box>
         )}
 
-        <Box p={3}>
-          <Stack gap={2}>
-            <Button
-              onClick={createNewThread}
-              onDoubleClick={importChats}
-              backgroundColor={darkMode ? 'gray.700' : 'gray.300'}
-              color={darkMode ? 'white' : 'black'}
-              w="full"
-              title="Double-click to import chats"
-            >
-              New chat
-            </Button>
-            
-            {/* Storage management controls */}
-            {storageWarning && (
-              <HStack gap={1}>
+        {/* Chat History List */}
+        <Box flex="1" overflowY="auto" p={2}>
+          {threads.length === 0 ? (
+            <Box textAlign="center" py={8}>
+              <Text fontSize="2xl" mb={3} color={darkMode ? 'gray.400' : 'gray.300'}>💬</Text>
+              <Text color={darkMode ? 'gray.400' : 'gray.500'} fontSize="sm">No chat history yet</Text>
+              <Text color={darkMode ? 'gray.500' : 'gray.400'} fontSize="xs" mt={1}>
+                Start a conversation to see your chats here
+              </Text>
+            </Box>
+          ) : (
+            <Stack gap={1}>
+              {threads.map((t) => {
+                const selected = t.id === currentThread?.id
+                const lastMessage = t.messages[t.messages.length - 1]
+                const isUserMessage = lastMessage?.role === 'user'
+                
+                return (
+                  <Box
+                    key={t.id}
+                    onClick={() => setCurrentThreadId(t.id)}
+                    p={3}
+                    borderRadius="lg"
+                    cursor="pointer"
+                    transition="all 0.2s"
+                    bg={selected ? (darkMode ? 'blue.900' : 'blue.50') : 'transparent'}
+                    border={selected ? '1px solid' : '1px solid transparent'}
+                    borderColor={selected ? (darkMode ? 'blue.700' : 'blue.200') : 'transparent'}
+                    _hover={{ 
+                      bg: selected ? (darkMode ? 'blue.900' : 'blue.50') : (darkMode ? 'gray.800' : 'gray.50')
+                    }}
+                    role="group"
+                  >
+                    <Flex align="start" gap={3}>
+                      {/* AI Avatar */}
+                      <Box
+                        w={8}
+                        h={8}
+                        borderRadius="full"
+                        bg="blue.500"
+                        display="flex"
+                        alignItems="center"
+                        justifyContent="center"
+                        flexShrink={0}
+                      >
+                        <Text color="white" fontSize="xs" fontWeight="bold">
+                          AI
+                        </Text>
+                      </Box>
+                      
+                      <Box flex="1" minW={0}>
+                        <Flex justify="space-between" align="center">
+                          <Heading 
+                            size="sm" 
+                            color={darkMode ? 'white' : 'gray.900'} 
+                            lineClamp={1}
+                            fontSize="sm"
+                            fontWeight="medium"
+                          >
+                            {t.title || 'New chat'}
+                          </Heading>
+                          <ThreadMenu
+                            darkMode={darkMode}
+                            onRename={() => renameThread(t.id)}
+                            onDelete={() => deleteThread(t.id)}
+                          />
+                        </Flex>
+                        
+                        {lastMessage && (
+                          <Text 
+                            fontSize="xs" 
+                            color={darkMode ? 'gray.400' : 'gray.500'} 
+                            lineClamp={1}
+                            mt={1}
+                          >
+                            {isUserMessage ? '' : 'AI: '}{lastMessage.content.slice(0, 50)}...
+                          </Text>
+                        )}
+                        
+                        <Flex justify="space-between" align="center" mt={2}>
+                          <Text 
+                            fontSize="xs" 
+                            color="blue.500" 
+                            bg={darkMode ? 'blue.900' : 'blue.100'} 
+                            px={2} 
+                            py={1} 
+                            borderRadius="full"
+                          >
+                            Assistant
+                          </Text>
+                          <Text fontSize="xs" color={darkMode ? 'gray.500' : 'gray.400'}>
+                            {new Date(t.updatedAt).toLocaleDateString()}
+                          </Text>
+                        </Flex>
+                      </Box>
+                    </Flex>
+                  </Box>
+                )
+              })}
+            </Stack>
+          )}
+          
+          {/* Storage management controls */}
+          {storageWarning && (
+            <Box mt={4} px={2}>
+              <Stack gap={2}>
                 <Button
                   onClick={clearOldChats}
-                  size="xs"
+                  size="sm"
                   backgroundColor="orange.500"
                   color="white"
-                  flex="1"
+                  w="full"
                 >
-                  Clear Old
+                  Clear Old Chats
                 </Button>
                 <Button
                   onClick={exportChats}
-                  size="xs"
+                  size="sm"
                   backgroundColor={darkMode ? 'gray.600' : 'gray.400'}
                   color={darkMode ? 'white' : 'black'}
-                  flex="1"
+                  w="full"
                 >
-                  Export
+                  Export Chats
                 </Button>
-              </HStack>
-            )}
-          </Stack>
-
-          <Stack gap={1} overflowY="auto" maxH="calc(100dvh - 240px)">
-            {threads.map((t) => {
-              const selected = t.id === currentThread?.id
-              return (
-                <HStack key={t.id} gap={1} align="center" minW={0}>
-                  <Button
-                    onClick={() => setCurrentThreadId(t.id)}
-                    justifyContent="flex-start"
-                    overflow="hidden"
-                    textOverflow="ellipsis"
-                    whiteSpace="nowrap"
-                    flex="1"
-                    minW={0}
-                    backgroundColor={selected ? (darkMode ? '#3a3a3a' : '#eaeaea') : 'transparent'}
-                    color={selected ? (darkMode ? 'white' : 'black') : pageFg}
-                  >
-                    <Text as="span" overflow="hidden" textOverflow="ellipsis" display="block" maxW="100%">
-                      {t.title || 'New chat'}
-                    </Text>
-                  </Button>
-                  <ThreadMenu
-                    darkMode={darkMode}
-                    onRename={() => renameThread(t.id)}
-                    onDelete={() => deleteThread(t.id)}
-                  />
-                </HStack>
-              )
-            })}
-          </Stack>
+              </Stack>
+            </Box>
+          )}
         </Box>
 
         {/* Account Information Section */}
@@ -1456,7 +1525,7 @@ export default function ChatPage() {
             maxW="22rem" 
             bg={darkMode ? '#1f1f1f' : '#ffffff'} 
             borderRightWidth="1px"
-            borderRightColor={borderCol}
+            borderRightColor={darkMode ? 'gray.600' : 'gray.200'}
             overflowY="hidden"
             display="flex"
             flexDirection="column"
@@ -1464,104 +1533,172 @@ export default function ChatPage() {
             transform="translateX(0)"
             transition="transform 0.3s ease"
           >
-            {/* App Title and Description */}
-            <Box p={3} borderBottomWidth="1px" borderColor={borderCol}>
-              <Stack gap={1}>
-                <Heading size="sm" color={pageFg}>{env.appName}</Heading>
-                <Text fontSize="xs" color={darkMode ? 'gray.300' : 'gray.600'}>
-                  Chat-style interface to help manage and track your expenses.
-                </Text>
-              </Stack>
+            {/* Drawer Header */}
+            <Box p={4} borderBottomWidth="1px" borderBottomColor={darkMode ? 'gray.600' : 'gray.200'}>
+              <Flex justify="space-between" align="center" mb={3}>
+                <Heading size="md" color={pageFg}>Chat History</Heading>
+                <IconButton
+                  aria-label="Close sidebar"
+                  variant="ghost"
+                  backgroundColor={darkMode ? 'gray.700' : 'gray.100'}
+                  color={darkMode ? 'white' : 'gray.600'}
+                  _hover={{ backgroundColor: darkMode ? 'gray.600' : 'gray.200' }}
+                  borderRadius="full"
+                  onClick={() => setSidebarOpen(false)}
+                >
+                  <ChevronsLeft size={16} />
+                </IconButton>
+              </Flex>
+              <Button
+                onClick={() => {
+                  createNewThread()
+                  setSidebarOpen(false)
+                }}
+                onDoubleClick={importChats}
+                w="full"
+                backgroundColor="blue.500"
+                color="white"
+                _hover={{ backgroundColor: 'blue.600' }}
+                borderRadius="lg"
+                size="lg"
+                minH="48px"
+                title="Double-click to import chats"
+              >
+                <Text mr={2}>+</Text>
+                New Chat
+              </Button>
             </Box>
 
-            <HStack justify="space-between" p={3} borderBottomWidth="1px">
-              <Heading size="sm">Chat History</Heading>
-              <IconButton
-                aria-label="Close sidebar"
-                variant="ghost"
-                backgroundColor={darkMode ? 'gray.700' : 'gray.300'}
-                color={darkMode ? 'white' : 'black'}
-                onClick={() => setSidebarOpen(false)}
-              >
-                <ChevronsLeft size={18} />
-              </IconButton>
-            </HStack>
-            <Box p={3} flex="1" display="flex" flexDirection="column" minH={0}>
-                <Stack gap={2}>
-                  <Button
-                    onClick={createNewThread}
-                    onDoubleClick={importChats}
-                    backgroundColor={darkMode ? 'gray.700' : 'gray.300'}
-                    color={darkMode ? 'white' : 'black'}
-                    w="full"
-                    size="lg"
-                    minH="48px"
-                    title="Double-click to import chats"
-                  >
-                    New chat
-                  </Button>
-                  
-                  {/* Storage management controls for mobile */}
-                  {storageWarning && (
-                    <HStack gap={1}>
-                      <Button
-                        onClick={clearOldChats}
-                        size="sm"
-                        backgroundColor="orange.500"
-                        color="white"
-                        flex="1"
-                      >
-                        Clear Old
-                      </Button>
-                      <Button
-                        onClick={exportChats}
-                        size="sm"
-                        backgroundColor={darkMode ? 'gray.600' : 'gray.400'}
-                        color={darkMode ? 'white' : 'black'}
-                        flex="1"
-                      >
-                        Export
-                      </Button>
-                    </HStack>
-                  )}
-                </Stack>
-
-              <Stack gap={1} overflowY="auto" flex="1">
-                {threads.map((t) => {
-                  const selected = t.id === currentThread?.id
-                  return (
-                    <HStack key={t.id} gap={1} align="center" minW={0}>
-                      <Button
+            {/* Chat History List */}
+            <Box flex="1" overflowY="auto" p={2}>
+              {threads.length === 0 ? (
+                <Box textAlign="center" py={8}>
+                  <Text fontSize="2xl" mb={3} color={darkMode ? 'gray.400' : 'gray.300'}>💬</Text>
+                  <Text color={darkMode ? 'gray.400' : 'gray.500'} fontSize="sm">No chat history yet</Text>
+                  <Text color={darkMode ? 'gray.500' : 'gray.400'} fontSize="xs" mt={1}>
+                    Start a conversation to see your chats here
+                  </Text>
+                </Box>
+              ) : (
+                <Stack gap={1}>
+                  {threads.map((t) => {
+                    const selected = t.id === currentThread?.id
+                    const lastMessage = t.messages[t.messages.length - 1]
+                    const isUserMessage = lastMessage?.role === 'user'
+                    
+                    return (
+                      <Box
+                        key={t.id}
                         onClick={() => {
                           setCurrentThreadId(t.id)
                           setSidebarOpen(false)
                         }}
-                        justifyContent="flex-start"
-                        overflow="hidden"
-                        textOverflow="ellipsis"
-                        whiteSpace="nowrap"
-                        flex="1"
-                        minW={0}
-                        minH="44px"
-                        backgroundColor={selected ? (darkMode ? '#3a3a3a' : '#eaeaea') : 'transparent'}
-                        color={selected ? (darkMode ? 'white' : 'black') : pageFg}
-                        _hover={{
-                          backgroundColor: selected ? (darkMode ? '#3a3a3a' : '#eaeaea') : (darkMode ? 'gray.700' : 'gray.100')
+                        p={3}
+                        borderRadius="lg"
+                        cursor="pointer"
+                        transition="all 0.2s"
+                        bg={selected ? (darkMode ? 'blue.900' : 'blue.50') : 'transparent'}
+                        border={selected ? '1px solid' : '1px solid transparent'}
+                        borderColor={selected ? (darkMode ? 'blue.700' : 'blue.200') : 'transparent'}
+                        _hover={{ 
+                          bg: selected ? (darkMode ? 'blue.900' : 'blue.50') : (darkMode ? 'gray.800' : 'gray.50')
                         }}
+                        role="group"
                       >
-                        <Text as="span" overflow="hidden" textOverflow="ellipsis" display="block" maxW="100%">
-                          {t.title || 'New chat'}
-                        </Text>
-                      </Button>
-                      <ThreadMenu
-                        darkMode={darkMode}
-                        onRename={() => renameThread(t.id)}
-                        onDelete={() => deleteThread(t.id)}
-                      />
-                    </HStack>
-                  )
-                })}
-              </Stack>
+                        <Flex align="start" gap={3}>
+                          {/* AI Avatar */}
+                          <Box
+                            w={8}
+                            h={8}
+                            borderRadius="full"
+                            bg="blue.500"
+                            display="flex"
+                            alignItems="center"
+                            justifyContent="center"
+                            flexShrink={0}
+                          >
+                            <Text color="white" fontSize="xs" fontWeight="bold">
+                              AI
+                            </Text>
+                          </Box>
+                          
+                          <Box flex="1" minW={0}>
+                            <Flex justify="space-between" align="center">
+                              <Heading 
+                                size="sm" 
+                                color={darkMode ? 'white' : 'gray.900'} 
+                                lineClamp={1}
+                                fontSize="sm"
+                                fontWeight="medium"
+                              >
+                                {t.title || 'New chat'}
+                              </Heading>
+                              <ThreadMenu
+                                darkMode={darkMode}
+                                onRename={() => renameThread(t.id)}
+                                onDelete={() => deleteThread(t.id)}
+                              />
+                            </Flex>
+                            
+                            {lastMessage && (
+                              <Text 
+                                fontSize="xs" 
+                                color={darkMode ? 'gray.400' : 'gray.500'} 
+                                lineClamp={1}
+                                mt={1}
+                              >
+                                {isUserMessage ? '' : 'AI: '}{lastMessage.content.slice(0, 50)}...
+                              </Text>
+                            )}
+                            
+                            <Flex justify="space-between" align="center" mt={2}>
+                              <Text 
+                                fontSize="xs" 
+                                color="blue.500" 
+                                bg={darkMode ? 'blue.900' : 'blue.100'} 
+                                px={2} 
+                                py={1} 
+                                borderRadius="full"
+                              >
+                                Assistant
+                              </Text>
+                              <Text fontSize="xs" color={darkMode ? 'gray.500' : 'gray.400'}>
+                                {new Date(t.updatedAt).toLocaleDateString()}
+                              </Text>
+                            </Flex>
+                          </Box>
+                        </Flex>
+                      </Box>
+                    )
+                  })}
+                </Stack>
+              )}
+              
+              {/* Storage management controls for mobile */}
+              {storageWarning && (
+                <Box mt={4} px={2}>
+                  <Stack gap={2}>
+                    <Button
+                      onClick={clearOldChats}
+                      size="sm"
+                      backgroundColor="orange.500"
+                      color="white"
+                      w="full"
+                    >
+                      Clear Old Chats
+                    </Button>
+                    <Button
+                      onClick={exportChats}
+                      size="sm"
+                      backgroundColor={darkMode ? 'gray.600' : 'gray.400'}
+                      color={darkMode ? 'white' : 'black'}
+                      w="full"
+                    >
+                      Export Chats
+                    </Button>
+                  </Stack>
+                </Box>
+              )}
             </Box>
 
             {/* Account Information Section - Mobile */}
@@ -1596,7 +1733,7 @@ export default function ChatPage() {
       <Flex 
         direction="column" 
         flex="1" 
-        ml={{ base: 0, md: sidebarCollapsed ? 0 : 72 }}
+        ml={{ base: 0, md: sidebarCollapsed ? 0 : 80 }}
         transition="margin-left 0.2s ease"
       >
         {cameraOpen && (
