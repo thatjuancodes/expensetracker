@@ -254,8 +254,8 @@ class ChatStorage {
   }
 }
 
-function MessageBubble(props: { message: ChatMessage; messageBubbleMaxW: any; messageBubbleP: any; messageBubbleFontSize: any; imageGap: any }) {
-  const { message, messageBubbleMaxW, messageBubbleP, messageBubbleFontSize, imageGap } = props
+function MessageBubble(props: { message: ChatMessage; messageBubbleMaxW: any; imageGap: any }) {
+  const { message, messageBubbleMaxW, imageGap } = props
   const { resolvedTheme } = useTheme()
   const darkMode = resolvedTheme === 'dark'
 
@@ -264,18 +264,72 @@ function MessageBubble(props: { message: ChatMessage; messageBubbleMaxW: any; me
 
   return (
     <Flex justify={isUser ? 'flex-end' : 'flex-start'}>
-      <Box
+      <Flex
+        direction={isUser ? 'row-reverse' : 'row'}
+        align="flex-start"
+        gap={2}
         maxW={messageBubbleMaxW}
-        borderRadius="lg"
-        p={messageBubbleP}
-        fontSize={messageBubbleFontSize}
-        {...(isUser
-          ? { colorPalette: 'blue', bg: 'colorPalette.solid', color: 'colorPalette.contrast' }
-          : { bg: 'bg.subtle', color: 'fg' })}
       >
-        {isUser ? (
-          <Text whiteSpace="pre-wrap">{message.content}</Text>
-        ) : (
+        {/* Avatar */}
+        {!isUser && (
+          <Box
+            w={6}
+            h={6}
+            borderRadius="full"
+            bg="blue.500"
+            display="flex"
+            alignItems="center"
+            justifyContent="center"
+            mt={1}
+            flexShrink={0}
+          >
+            <Text color="white" fontSize="xs" fontWeight="bold">
+              AI
+            </Text>
+          </Box>
+        )}
+        
+        {isUser && (
+          <Box
+            w={6}
+            h={6}
+            borderRadius="full"
+            bg="blue.500"
+            display="flex"
+            alignItems="center"
+            justifyContent="center"
+            mt={1}
+            flexShrink={0}
+          >
+            <Text color="white" fontSize="xs" fontWeight="bold">
+              U
+            </Text>
+          </Box>
+        )}
+
+        {/* Message Content */}
+        <Box
+          bg={isUser ? 'blue.500' : (darkMode ? 'gray.700' : 'white')}
+          color={isUser ? 'white' : (darkMode ? 'white' : 'gray.800')}
+          borderRadius="2xl"
+          borderTopLeftRadius={!isUser ? 'md' : '2xl'}
+          borderTopRightRadius={isUser ? 'md' : '2xl'}
+          p={3}
+          shadow="xs"
+          border={!isUser ? '1px solid' : 'none'}
+          borderColor={!isUser ? (darkMode ? 'gray.600' : 'gray.100') : 'transparent'}
+          position="relative"
+        >
+          {isUser ? (
+            <Box>
+              <Text whiteSpace="pre-wrap" fontSize="sm" lineHeight="relaxed">
+                {message.content}
+              </Text>
+              <Text fontSize="xs" mt={1} color="blue.100">
+                {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+              </Text>
+            </Box>
+          ) : (
           <Box>
             <ReactMarkdown
               remarkPlugins={[remarkGfm, remarkBreaks]}
@@ -337,21 +391,24 @@ function MessageBubble(props: { message: ChatMessage; messageBubbleMaxW: any; me
               </TooltipRoot>
             </Flex>
           </Box>
-        )}
-        {message.images && message.images.length > 0 && (
-          <HStack gap={imageGap} mt={2} wrap="wrap">
-            {message.images.map((src, idx) => (
-              <ResponsiveImage 
-                key={idx} 
-                src={src} 
-                alt="attachment"
-                maxW={{ base: 120, md: 160 }}
-                maxH={{ base: 120, md: 160 }}
-              />
-            ))}
-          </HStack>
-        )}
-      </Box>
+          )}
+          
+          {/* Message Images */}
+          {message.images && message.images.length > 0 && (
+            <HStack gap={imageGap} mt={2} wrap="wrap">
+              {message.images.map((src, idx) => (
+                <ResponsiveImage 
+                  key={idx} 
+                  src={src} 
+                  alt="attachment"
+                  maxW={{ base: 120, md: 160 }}
+                  maxH={{ base: 120, md: 160 }}
+                />
+              ))}
+            </HStack>
+          )}
+        </Box>
+      </Flex>
     </Flex>
   )
 }
@@ -366,7 +423,7 @@ export default function ChatPage() {
   const pageBg = darkMode ? '#2e2e2e' : '#f4f4f4'
   const pageFg = darkMode ? 'white' : 'gray.900'
   const borderCol = darkMode ? 'gray.600' : 'gray.400'
-  const placeholderCol = darkMode ? 'gray.300' : 'gray.600'
+  // const placeholderCol = darkMode ? 'gray.300' : 'gray.600' // Unused - removed
   const [threads, setThreads] = useState<ChatThread[]>(() => {
     return ChatStorage.loadThreads()
   })
@@ -381,7 +438,7 @@ export default function ChatPage() {
   const [isRecording, setIsRecording] = useState<boolean>(false)
   const [isAutoSending, setIsAutoSending] = useState<boolean>(false)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
-  const cameraInputRef = useRef<HTMLInputElement | null>(null)
+  // const cameraInputRef = useRef<HTMLInputElement | null>(null) // Removed - no longer needed
   const audioStreamRef = useRef<MediaStream | null>(null)
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const audioChunksRef = useRef<Blob[]>([])
@@ -400,8 +457,7 @@ export default function ChatPage() {
   
   // Pre-compute all breakpoint values to avoid conditional hook calls
   const messageBubbleMaxW = useBreakpointValue({ base: '90%', sm: '85%', md: '70%', lg: '60%' })
-  const messageBubbleP = useBreakpointValue({ base: 5, md: 3 })
-  const messageBubbleFontSize = useBreakpointValue({ base: 'md', md: 'sm' })
+  // Removed unused messageBubbleP and messageBubbleFontSize - using hardcoded values in modern message bubbles
   const imageGap = useBreakpointValue({ base: 2, md: 2 })
   const mobileWidth = useBreakpointValue({ base: '85%', sm: '75%' })
   const cameraP = useBreakpointValue({ base: 3, md: 4 })
@@ -414,19 +470,13 @@ export default function ChatPage() {
   const inputContainerPx = useBreakpointValue({ base: 3, md: 6 })
   const inputGap = useBreakpointValue({ base: 1, md: 2 })
   const clearButtonSize = useBreakpointValue({ base: 'sm', md: 'xs' }) as 'xs' | 'sm' | 'md' | 'lg'
-  const textareaRows = useBreakpointValue({ base: 2, md: 3 })
-  const textareaFontSize = useBreakpointValue({ base: 'md', md: 'sm' })
-  const textareaMinH = useBreakpointValue({ base: '44px', md: 'auto' })
-  const bottomFlexWrap = useBreakpointValue({ base: 'wrap', md: 'nowrap' })
-  const bottomGap = useBreakpointValue({ base: 3, md: 0 })
-  const bottomHStackGap = useBreakpointValue({ base: 2, md: 2 })
-  const buttonSize = useBreakpointValue({ base: 'md', md: 'sm' }) as 'xs' | 'sm' | 'md' | 'lg'
-  const buttonMinH = useBreakpointValue({ base: '48px', md: 'auto' })
-  const sendButtonSize = useBreakpointValue({ base: 'md', md: 'sm' }) as 'xs' | 'sm' | 'md' | 'lg'
-  const sendButtonMinH = useBreakpointValue({ base: '48px', md: 'auto' })
+  // Removed unused textarea breakpoint values - using hardcoded values in modern chat input
+  // Removed unused button layout variables - using modern chat input only
   
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(false)
+  const [isTyping, setIsTyping] = useState<boolean>(false)
+  const [showQuickActions] = useState<boolean>(true)
   
   const [devMode, setDevMode] = useState(() => {
     const saved = localStorage.getItem('devMode')
@@ -733,86 +783,7 @@ export default function ChatPage() {
 
   // Recording end is handled by document event listeners
 
-  async function openCamera() {
-    try {
-      // Check for HTTPS requirement
-      if (window.location.protocol !== 'https:' && window.location.hostname !== 'localhost') {
-        window.alert('Camera requires HTTPS connection. Please use a secure connection.')
-        return
-      }
-
-      if (!navigator.mediaDevices?.getUserMedia) {
-        // Fallback to file input if camera API not supported
-        window.alert('Camera API not supported. Please use "Choose Image" instead.')
-        return
-      }
-
-      // Try multiple camera constraint configurations for better Android compatibility
-      const constraintOptions = [
-        // Prefer rear camera with flexible constraints
-        { video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } } },
-        // Fallback to any rear camera
-        { video: { facingMode: 'environment' } },
-        // Fallback to front camera
-        { video: { facingMode: 'user' } },
-        // Fallback to any camera
-        { video: true }
-      ]
-
-      let stream = null
-      let lastError = null
-
-      for (const constraints of constraintOptions) {
-        try {
-          stream = await navigator.mediaDevices.getUserMedia(constraints)
-          break
-        } catch (err) {
-          lastError = err
-          console.warn('Camera constraint failed:', constraints, err)
-        }
-      }
-
-      if (!stream) {
-        // Handle specific error types
-        if (lastError instanceof Error) {
-          if (lastError.name === 'NotAllowedError') {
-            window.alert('Camera permission denied. Please allow camera access and try again.')
-          } else if (lastError.name === 'NotFoundError') {
-            window.alert('No camera found on this device. Please use "Choose Image" instead.')
-          } else if (lastError.name === 'NotReadableError') {
-            window.alert('Camera is busy or unavailable. Please close other apps using the camera and try again.')
-          } else {
-            window.alert(`Camera error: ${lastError.message}. Please try "Choose Image" instead.`)
-          }
-        } else {
-          window.alert('Unable to access camera. Please use "Choose Image" instead.')
-        }
-        return
-      }
-
-      streamRef.current = stream
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream
-        
-        // Enhanced play handling for mobile browsers
-        try {
-          // Set video attributes for better mobile support
-          videoRef.current.setAttribute('playsinline', 'true')
-          videoRef.current.setAttribute('autoplay', 'true')
-          videoRef.current.setAttribute('muted', 'true')
-          
-          await videoRef.current.play()
-        } catch (playError) {
-          console.warn('Video play failed:', playError)
-          // Continue anyway, many browsers will auto-play
-        }
-      }
-      setCameraOpen(true)
-    } catch (err) {
-      console.error('Camera setup error:', err)
-      window.alert('Unexpected camera error. Please use "Choose Image" instead.')
-    }
-  }
+  // Removed openCamera function - no longer needed with simplified input
 
   function closeCamera() {
     if (streamRef.current) {
@@ -1107,6 +1078,7 @@ export default function ChatPage() {
     )
 
     setIsSending(true)
+    setIsTyping(true)
 
     try {
       const isImageOnly = userMessage.content.trim().length === 0 && (userMessage.images?.length ?? 0) > 0
@@ -1204,6 +1176,7 @@ export default function ChatPage() {
       )
     } finally {
       setIsSending(false)
+      setIsTyping(false)
     }
   }
 
@@ -1702,11 +1675,72 @@ export default function ChatPage() {
                   key={message.id} 
                   message={message} 
                   messageBubbleMaxW={messageBubbleMaxW}
-                  messageBubbleP={messageBubbleP}
-                  messageBubbleFontSize={messageBubbleFontSize}
                   imageGap={imageGap}
                 />
               ))}
+              
+              {/* Typing Indicator */}
+              {isTyping && (
+                <Flex justify="flex-start">
+                  <Flex
+                    align="flex-start"
+                    gap={2}
+                    maxW={messageBubbleMaxW}
+                  >
+                    {/* Assistant Avatar */}
+                    <Box
+                      w={6}
+                      h={6}
+                      borderRadius="full"
+                      bg="blue.500"
+                      display="flex"
+                      alignItems="center"
+                      justifyContent="center"
+                      mt={1}
+                      flexShrink={0}
+                    >
+                      <Text color="white" fontSize="xs" fontWeight="bold">
+                        AI
+                      </Text>
+                    </Box>
+                    
+                    {/* Typing Bubble */}
+                    <Box
+                      bg={darkMode ? 'gray.700' : 'white'}
+                      borderRadius="2xl"
+                      borderTopLeftRadius="md"
+                      p={3}
+                      shadow="xs"
+                      border="1px solid"
+                      borderColor={darkMode ? 'gray.600' : 'gray.100'}
+                    >
+                      <Flex gap={1}>
+                        <Box
+                          w={2}
+                          h={2}
+                          bg="gray.400"
+                          borderRadius="full"
+                          animation="bounce 1.4s infinite"
+                        />
+                        <Box
+                          w={2}
+                          h={2}
+                          bg="gray.400"
+                          borderRadius="full"
+                          animation="bounce 1.4s infinite 0.2s"
+                        />
+                        <Box
+                          w={2}
+                          h={2}
+                          bg="gray.400"
+                          borderRadius="full"
+                          animation="bounce 1.4s infinite 0.4s"
+                        />
+                      </Flex>
+                    </Box>
+                  </Flex>
+                </Flex>
+              )}
             </Stack>
           </Container>
         </Box>
@@ -1799,26 +1833,133 @@ export default function ChatPage() {
               </HStack>
             )}
               {!talkMode && (
-                <Textarea
-                  placeholder="How can I help you today?"
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  onKeyDown={handleKeyDown}
-                  resize="none"
-                  rows={textareaRows}
-                  disabled={isSending}
-                  bg={pageBg}
-                  color={pageFg}
-                  borderColor={borderCol}
-                  fontSize={textareaFontSize}
-                  minH={textareaMinH}
-                  _placeholder={{ color: placeholderCol }}
-                  shadow="sm"
-                  _focus={{
-                    borderColor: darkMode ? 'blue.400' : 'blue.500',
-                    boxShadow: `0 0 0 1px ${darkMode ? '#63b3ed' : '#3182ce'}`
-                  }}
-                />
+                <Box>
+                  {/* Modern Chat Input */}
+                  <Flex align="flex-end" gap={3}>
+                    <Box flex="1" position="relative">
+                      <Textarea
+                        placeholder="Type your message..."
+                        value={input}
+                        onChange={(e) => setInput(e.target.value)}
+                        onKeyDown={handleKeyDown}
+                        resize="none"
+                        rows={1}
+                        disabled={isSending}
+                        bg={darkMode ? 'gray.700' : 'white'}
+                        color={darkMode ? 'white' : 'gray.800'}
+                        border="1px solid"
+                        borderColor={darkMode ? 'gray.600' : 'gray.200'}
+                        borderRadius="2xl"
+                        px={4}
+                        py={3}
+                        pr={12}
+                        fontSize="sm"
+                        minH="44px"
+                        maxH="128px"
+                        lineHeight="20px"
+                        _placeholder={{ color: darkMode ? 'gray.400' : 'gray.500' }}
+                        _focus={{
+                          outline: 'none',
+                          borderColor: darkMode ? 'blue.400' : 'blue.500',
+                          boxShadow: `0 0 0 2px ${darkMode ? 'rgba(96, 165, 250, 0.2)' : 'rgba(59, 130, 246, 0.1)'}`
+                        }}
+                        onInput={(e) => {
+                          const target = e.target as HTMLTextAreaElement
+                          target.style.height = '44px'
+                          target.style.height = Math.min(target.scrollHeight, 128) + 'px'
+                        }}
+                      />
+                      
+                      {/* Attachment Button */}
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept="image/*"
+                        multiple
+                        style={{ display: 'none' }}
+                        onChange={(e) => onSelectImages(e.currentTarget.files)}
+                      />
+                      <IconButton
+                        aria-label="Attach file"
+                        position="absolute"
+                        right={2}
+                        bottom={2}
+                        size="sm"
+                        variant="ghost"
+                        borderRadius="full"
+                        onClick={() => fileInputRef.current?.click()}
+                        _hover={{ bg: darkMode ? 'gray.600' : 'gray.100' }}
+                      >
+                        <Text fontSize="sm">📎</Text>
+                      </IconButton>
+                    </Box>
+                    
+                    {/* Send Button */}
+                    <IconButton
+                      aria-label="Send message"
+                      onClick={() => void handleSend()}
+                      size="lg"
+                      borderRadius="full"
+                      backgroundColor={canSend ? 'blue.500' : 'gray.200'}
+                      color={canSend ? 'white' : 'gray.400'}
+                      disabled={!canSend || isSending || isAutoSending}
+                      _hover={{
+                        backgroundColor: canSend ? 'blue.600' : 'gray.200',
+                      }}
+                      _active={{
+                        transform: 'scale(0.95)'
+                      }}
+                      transition="all 0.2s"
+                      shadow="lg"
+                      minH="48px"
+                      minW="48px"
+                    >
+                      <Text fontSize="sm">➤</Text>
+                    </IconButton>
+                  </Flex>
+                  
+                  {/* Quick Actions */}
+                  {showQuickActions && (
+                    <Flex gap={2} mt={3}>
+                      <Button
+                        onClick={() => setInput('Help me track my expenses')}
+                        size="sm"
+                        backgroundColor={darkMode ? 'gray.600' : 'gray.100'}
+                        color={darkMode ? 'gray.200' : 'gray.600'}
+                        borderRadius="full"
+                        fontSize="xs"
+                        _hover={{ backgroundColor: darkMode ? 'gray.500' : 'gray.200' }}
+                        transition="colors 0.2s"
+                      >
+                        💡 Track Expenses
+                      </Button>
+                      <Button
+                        onClick={() => setInput('Generate a spending summary')}
+                        size="sm"
+                        backgroundColor={darkMode ? 'gray.600' : 'gray.100'}
+                        color={darkMode ? 'gray.200' : 'gray.600'}
+                        borderRadius="full"
+                        fontSize="xs"
+                        _hover={{ backgroundColor: darkMode ? 'gray.500' : 'gray.200' }}
+                        transition="colors 0.2s"
+                      >
+                        📊 Summary
+                      </Button>
+                      <Button
+                        onClick={() => setInput('Help me budget better')}
+                        size="sm"
+                        backgroundColor={darkMode ? 'gray.600' : 'gray.100'}
+                        color={darkMode ? 'gray.200' : 'gray.600'}
+                        borderRadius="full"
+                        fontSize="xs"
+                        _hover={{ backgroundColor: darkMode ? 'gray.500' : 'gray.200' }}
+                        transition="colors 0.2s"
+                      >
+                        💰 Budget Help
+                      </Button>
+                    </Flex>
+                  )}
+                </Box>
               )}
             {isMobile ? (
               talkMode ? (
@@ -1917,178 +2058,19 @@ export default function ChatPage() {
                         transform: 'scale(0.95)'
                       }}
                       transition="all 0.2s ease"
-                      shadow="sm"
+                      shadow="xs"
                     >
                       <Camera size={24} />
                     </IconButton>
                   </Box>
                 </Box>
               ) : (
-                <Stack gap={3}>
-                {/* Input controls row 1 */}
-                <HStack gap={bottomHStackGap} wrap="wrap">
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept="image/*"
-                    multiple
-                    style={{ display: 'none' }}
-                    onChange={(e) => onSelectImages(e.currentTarget.files)}
-                  />
-                  <input
-                    ref={cameraInputRef}
-                    type="file"
-                    accept="image/*"
-                    capture="environment"
-                    style={{ display: 'none' }}
-                    onChange={(e) => onSelectImages(e.currentTarget.files)}
-                  />
-                  <Button
-                    onClick={() => fileInputRef.current?.click()}
-                    size={buttonSize}
-                    minH={buttonMinH}
-                    flex="1"
-                    backgroundColor={darkMode ? 'gray.700' : 'gray.300'}
-                    color={darkMode ? 'white' : 'black'}
-                  >
-                    📁 Choose
-                  </Button>
-                  {/* Camera button with fallback */}
-                  <Button
-                    onClick={() => {
-                      // Check if camera API is available and supported
-                      if (!!navigator.mediaDevices?.getUserMedia && 
-                          (window.location.protocol === 'https:' || window.location.hostname === 'localhost')) {
-                        void openCamera()
-                      } else {
-                        // Fallback to file input with camera capture
-                        cameraInputRef.current?.click()
-                      }
-                    }}
-                    size={buttonSize}
-                    minH={buttonMinH}
-                    flex="1"
-                    backgroundColor={darkMode ? 'gray.700' : 'gray.300'}
-                    color={darkMode ? 'white' : 'black'}
-                  >
-                    📷 Photo
-                  </Button>
-                </HStack>
-                
-                {/* Input controls row 2 */}
-                <HStack gap={bottomHStackGap}>
-                  <Button
-                    onMouseDown={handleRecordingStart}
-                    onTouchStart={handleRecordingStart}
-                    size={buttonSize}
-                    minH={buttonMinH}
-                    flex="1"
-                    backgroundColor={isRecording ? (darkMode ? 'red.600' : 'red.400') : (darkMode ? 'gray.700' : 'gray.300')}
-                    color={isRecording ? 'white' : (darkMode ? 'white' : 'black')}
-                    disabled={isSending || isAutoSending}
-                    transform={(isRecording || isAutoSending) ? 'scale(0.95)' : 'scale(1)'}
-                    transition="all 0.1s"
-                    _active={{
-                      transform: 'scale(0.95)'
-                    }}
-                    userSelect="none"
-                    opacity={isAutoSending ? 0.7 : 1}
-                  >
-                    {isAutoSending ? '➤ Sending...' : (isRecording ? '🎤 Recording...' : '🎤 Hold to Send')}
-                  </Button>
-                  <Button
-                    onClick={() => void handleSend()}
-                    size={sendButtonSize}
-                    minH={sendButtonMinH}
-                    flex="1"
-                    backgroundColor={darkMode ? 'blue.600' : 'blue.300'}
-                    color={darkMode ? 'white' : 'black'}
-                    disabled={!canSend || isAutoSending}
-                  >
-                    ➤ Send
-                  </Button>
-                </HStack>
-                </Stack>
+                // Simplified mobile input - no extra buttons, modern input handles everything
+                null
               )
             ) : (
-              <HStack justify="space-between" flexWrap={bottomFlexWrap} gap={bottomGap}>
-                <HStack gap={bottomHStackGap}>
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept="image/*"
-                    multiple
-                    style={{ display: 'none' }}
-                    onChange={(e) => onSelectImages(e.currentTarget.files)}
-                  />
-                  <input
-                    ref={cameraInputRef}
-                    type="file"
-                    accept="image/*"
-                    capture="environment"
-                    style={{ display: 'none' }}
-                    onChange={(e) => onSelectImages(e.currentTarget.files)}
-                  />
-                  <Button
-                    onClick={() => fileInputRef.current?.click()}
-                    size={buttonSize}
-                    minH={buttonMinH}
-                    backgroundColor={darkMode ? 'gray.700' : 'gray.300'}
-                    color={darkMode ? 'white' : 'black'}
-                  >
-                    Choose Image
-                  </Button>
-                  {/* Camera button with fallback */}
-                  <Button
-                    onClick={() => {
-                      // Check if camera API is available and supported
-                      if (!!navigator.mediaDevices?.getUserMedia && 
-                          (window.location.protocol === 'https:' || window.location.hostname === 'localhost')) {
-                        void openCamera()
-                      } else {
-                        // Fallback to file input with camera capture
-                        cameraInputRef.current?.click()
-                      }
-                    }}
-                    size={buttonSize}
-                    minH={buttonMinH}
-                    backgroundColor={darkMode ? 'gray.700' : 'gray.300'}
-                    color={darkMode ? 'white' : 'black'}
-                  >
-                    Take Photo
-                  </Button>
-                  <Button
-                    onMouseDown={handleRecordingStart}
-                    onTouchStart={handleRecordingStart}
-                    size={buttonSize}
-                    minH={buttonMinH}
-                    backgroundColor={isRecording ? (darkMode ? 'red.600' : 'red.400') : (darkMode ? 'gray.700' : 'gray.300')}
-                    color={isRecording ? 'white' : (darkMode ? 'white' : 'black')}
-                    disabled={isSending || isAutoSending}
-                    transform={(isRecording || isAutoSending) ? 'scale(0.95)' : 'scale(1)'}
-                    transition="all 0.1s"
-                    _active={{
-                      transform: 'scale(0.95)'
-                    }}
-                    userSelect="none"
-                    opacity={isAutoSending ? 0.7 : 1}
-                  >
-                    {isAutoSending ? 'Sending...' : (isRecording ? 'Recording... Release to send' : 'Hold to Send')}
-                  </Button>
-                </HStack>
-                <HStack gap={bottomHStackGap}>
-                <Button
-                  onClick={() => void handleSend()}
-                  size={sendButtonSize}
-                  minH={sendButtonMinH}
-                  backgroundColor={darkMode ? 'blue.600' : 'blue.300'}
-                  color={darkMode ? 'white' : 'black'}
-                  disabled={!canSend || isAutoSending}
-                >
-                  Send
-                </Button>
-                </HStack>
-              </HStack>
+              // Simplified desktop input - modern input handles everything  
+              null
             )}
             </Stack>
           </Container>
