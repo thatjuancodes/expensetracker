@@ -378,6 +378,7 @@ export default function ChatPage() {
   const [images, setImages] = useState<string[]>([])
   const [audioFile, setAudioFile] = useState<File | null>(null)
   const [isRecording, setIsRecording] = useState<boolean>(false)
+  const [isAutoSending, setIsAutoSending] = useState<boolean>(false)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const cameraInputRef = useRef<HTMLInputElement | null>(null)
   const audioStreamRef = useRef<MediaStream | null>(null)
@@ -506,7 +507,7 @@ export default function ChatPage() {
     () => (input.trim().length > 0 || images.length > 0) && !isSending,
     [input, images.length, isSending],
   )
-  const canSendVoice = useMemo(() => !!audioFile && !isSending && !isRecording, [audioFile, isSending, isRecording])
+  const canSendVoice = useMemo(() => !!audioFile && !isSending && !isRecording && !isAutoSending, [audioFile, isSending, isRecording, isAutoSending])
 
   useEffect(() => {
     // Persist threads & selection with storage optimization
@@ -599,12 +600,16 @@ export default function ChatPage() {
     setAudioFile(null)
   }
 
-  async function startRecording() {
+  async function startHoldRecording() {
     try {
       if (!navigator.mediaDevices?.getUserMedia) {
         window.alert('Microphone not supported in this browser')
-        return
+        return false
       }
+      
+      // Clear any previous audio file when starting new recording
+      setAudioFile(null)
+      
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
       audioStreamRef.current = stream
       const recorder = new MediaRecorder(stream)
@@ -617,11 +622,10 @@ export default function ChatPage() {
         }
       }
 
-      recorder.onstop = () => {
+      recorder.onstop = async () => {
         const blob = new Blob(audioChunksRef.current, { type: 'audio/webm' })
-        const file = new File([blob], `recording-${Date.now()}.webm`, { type: 'audio/webm' })
-        setAudioFile(file)
-        // cleanup stream
+        
+        // cleanup stream first
         if (audioStreamRef.current) {
           audioStreamRef.current.getTracks().forEach((t) => t.stop())
           audioStreamRef.current = null
@@ -629,16 +633,41 @@ export default function ChatPage() {
         mediaRecorderRef.current = null
         audioChunksRef.current = []
         setIsRecording(false)
+        
+        // Check if recording has content and meets minimum duration
+        // Rough estimate: 1KB per 100ms of audio, so minimum 500 bytes for ~50ms
+        if (blob.size > 500) {
+          const file = new File([blob], `recording-${Date.now()}.webm`, { type: 'audio/webm' })
+          
+          // Auto-send the voice message
+          setIsAutoSending(true)
+          try {
+            await handleSendVoiceMessage(file)
+          } catch (error) {
+            console.error('Auto-send failed:', error)
+            // Fallback: set the file for manual sending
+            setAudioFile(file)
+          } finally {
+            setIsAutoSending(false)
+          }
+        } else {
+          // Recording too short, ignore
+          console.log('Recording too short, ignoring')
+        }
       }
 
       recorder.start()
       setIsRecording(true)
+      return true
     } catch (err) {
+      console.error('Recording error:', err)
       window.alert('Unable to access microphone. Please check permissions.')
+      setIsRecording(false)
+      return false
     }
   }
 
-  function stopRecording() {
+  function stopHoldRecording() {
     const recorder = mediaRecorderRef.current
     if (recorder && recorder.state !== 'inactive') {
       recorder.stop()
@@ -652,10 +681,42 @@ export default function ChatPage() {
     }
   }
 
+  // Handle press and hold events for recording
+  const handleRecordingStart = async (e: React.MouseEvent | React.TouchEvent) => {
+    e.preventDefault()
+    if (isSending || isRecording || isAutoSending) return
+    
+    // Prevent context menu on long press (mobile)
+    if ('touches' in e) {
+      document.addEventListener('contextmenu', (e) => e.preventDefault(), { once: true })
+    }
+    
+    const success = await startHoldRecording()
+    if (!success) return
+    
+    // Add event listeners for release
+    const handleEnd = (event: Event) => {
+      event.preventDefault()
+      stopHoldRecording()
+      document.removeEventListener('mouseup', handleEnd)
+      document.removeEventListener('touchend', handleEnd)
+      document.removeEventListener('touchcancel', handleEnd)
+      document.removeEventListener('mouseleave', handleEnd)
+    }
+    
+    document.addEventListener('mouseup', handleEnd)
+    document.addEventListener('touchend', handleEnd)
+    document.addEventListener('touchcancel', handleEnd)
+    // Also handle mouse leave to stop recording if user drags away
+    document.addEventListener('mouseleave', handleEnd)
+  }
+
+  // Recording end is handled by document event listeners
+
   async function openCamera() {
     try {
       // Check for HTTPS requirement
-      if (window.window.location.protocol !== 'https:' && window.window.location.hostname !== 'localhost') {
+      if (window.location.protocol !== 'https:' && window.location.hostname !== 'localhost') {
         window.alert('Camera requires HTTPS connection. Please use a secure connection.')
         return
       }
@@ -802,26 +863,30 @@ export default function ChatPage() {
     }
   }
 
-  async function handleSendVoice() {
-    if (!audioFile || isSending) return
-    const fileToUpload = audioFile
+  // Enhanced voice sending function that can be called automatically or manually
+  async function handleSendVoiceMessage(file: File | null = null) {
+    const fileToUpload = file || audioFile
+    if (!fileToUpload || isSending || isAutoSending) return
+    
     const filename = fileToUpload.name || 'voice.webm'
+    const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 
     // Create a synthetic user message describing the voice submission
     const userMessage: ChatMessage = {
       id: generateMessageId(),
       role: 'user',
-      content: `(Voice message) ${filename}`,
+      content: `🎤 Voice message (${timestamp})`,
     }
 
-    setAudioFile(null)
+    // Clear audio file since we're sending it
+    if (!file) setAudioFile(null) // Only clear if using stored file
 
     setThreads((prev) =>
       prev.map((t) =>
         t.id === currentThread.id
           ? {
               ...t,
-              title: t.title === 'New chat' ? `Voice: ${filename}`.slice(0, 40) : t.title,
+              title: t.title === 'New chat' ? `Voice: ${timestamp}`.slice(0, 40) : t.title,
               messages: [...t.messages, userMessage],
               updatedAt: Date.now(),
             }
@@ -829,7 +894,7 @@ export default function ChatPage() {
       ),
     )
 
-    setIsSending(true)
+    if (!file) setIsSending(true) // Only set sending state for manual sends
     try {
       const response = await n8nClient.uploadReceipt<unknown>(fileToUpload, {
         filename,
@@ -839,7 +904,7 @@ export default function ChatPage() {
         uploadUrl: audioUrl,
       })
 
-      const content = extractN8nText(response) || `Voice uploaded: ${filename}`
+      const content = extractN8nText(response) || `Voice message processed`
       const assistantMessage: ChatMessage = {
         id: generateMessageId(),
         role: 'assistant',
@@ -868,9 +933,15 @@ export default function ChatPage() {
             : t,
         ),
       )
+      throw err // Re-throw for auto-send error handling
     } finally {
-      setIsSending(false)
+      if (!file) setIsSending(false) // Only clear sending state for manual sends
     }
+  }
+
+  // Legacy function for backward compatibility
+  async function handleSendVoice() {
+    await handleSendVoiceMessage()
   }
 
   function renameThread(threadId: string) {
@@ -1652,12 +1723,14 @@ export default function ChatPage() {
                   borderRadius="md"
                   px={3}
                   py={2}
-                  bg={pageBg}
-                  borderColor={borderCol}
+                  bg="green.50"
+                  borderColor="green.300"
                 >
-                  <Text fontSize="sm" color={pageFg}>
-                    Selected audio: {audioFile.name}
-                  </Text>
+                  <HStack gap={2}>
+                    <Text fontSize="sm" color="green.700" fontWeight="medium">
+                      🎤 Voice message ready to send
+                    </Text>
+                  </HStack>
                 </Box>
 
                 <Button 
@@ -1666,23 +1739,42 @@ export default function ChatPage() {
                   backgroundColor={darkMode ? 'gray.700' : 'gray.300'} 
                   color={darkMode ? 'white' : 'black'}
                 >
-                  Clear audio
+                  Clear
+                </Button>
+                <Button 
+                  onClick={() => void handleSendVoice()} 
+                  size={clearButtonSize}
+                  backgroundColor="green.500" 
+                  color="white"
+                  disabled={!canSendVoice}
+                >
+                  Send Now
                 </Button>
               </HStack>
             )}
-            {isRecording && (
+            {(isRecording || isAutoSending) && (
               <HStack gap={inputGap} wrap="wrap">
                 <Box
                   borderWidth="1px"
                   borderRadius="md"
                   px={3}
                   py={2}
-                  bg={pageBg}
-                  borderColor={borderCol}
+                  bg={isAutoSending ? "blue.50" : "red.50"}
+                  borderColor={isAutoSending ? "blue.300" : "red.300"}
+                  animation="pulse 1.5s infinite"
                 >
-                  <Text fontSize="sm" color={pageFg}>
-                    Recording... tap Stop to finish
-                  </Text>
+                  <HStack gap={2}>
+                    <Box
+                      w={2}
+                      h={2}
+                      bg={isAutoSending ? "blue.500" : "red.500"}
+                      borderRadius="full"
+                      animation="blink 1s infinite"
+                    />
+                    <Text fontSize="sm" color={isAutoSending ? "blue.700" : "red.700"} fontWeight="medium">
+                      {isAutoSending ? "➤ Sending voice message..." : "🎤 Recording... Release to send"}
+                    </Text>
+                  </HStack>
                 </Box>
               </HStack>
             )}
@@ -1760,55 +1852,36 @@ export default function ChatPage() {
                 
                 {/* Input controls row 2 */}
                 <HStack gap={bottomHStackGap}>
-                  {!isRecording ? (
-                    <Button
-                      onClick={() => void startRecording()}
-                      size={buttonSize}
-                      minH={buttonMinH}
-                      flex="1"
-                      backgroundColor={darkMode ? 'gray.700' : 'gray.300'}
-                      color={darkMode ? 'white' : 'black'}
-                      disabled={isSending}
-                    >
-                      🎤 Record
-                    </Button>
-                  ) : (
-                    <Button
-                      onClick={() => stopRecording()}
-                      size={buttonSize}
-                      minH={buttonMinH}
-                      flex="1"
-                      backgroundColor={darkMode ? 'red.600' : 'red.300'}
-                      color={darkMode ? 'white' : 'black'}
-                    >
-                      ⏹️ Stop
-                    </Button>
-                  )}
-                  {audioFile ? (
-                    <Button
-                      onClick={() => void handleSendVoice()}
-                      size={sendButtonSize}
-                      minH={sendButtonMinH}
-                      flex="1"
-                      backgroundColor={darkMode ? 'blue.600' : 'blue.300'}
-                      color={darkMode ? 'white' : 'black'}
-                      disabled={!canSendVoice}
-                    >
-                      🔊 Send Voice
-                    </Button>
-                  ) : (
-                    <Button
-                      onClick={() => void handleSend()}
-                      size={sendButtonSize}
-                      minH={sendButtonMinH}
-                      flex="1"
-                      backgroundColor={darkMode ? 'blue.600' : 'blue.300'}
-                      color={darkMode ? 'white' : 'black'}
-                      disabled={!canSend}
-                    >
-                      ➤ Send
-                    </Button>
-                  )}
+                  <Button
+                    onMouseDown={handleRecordingStart}
+                    onTouchStart={handleRecordingStart}
+                    size={buttonSize}
+                    minH={buttonMinH}
+                    flex="1"
+                    backgroundColor={isRecording ? (darkMode ? 'red.600' : 'red.400') : (darkMode ? 'gray.700' : 'gray.300')}
+                    color={isRecording ? 'white' : (darkMode ? 'white' : 'black')}
+                    disabled={isSending || isAutoSending}
+                    transform={(isRecording || isAutoSending) ? 'scale(0.95)' : 'scale(1)'}
+                    transition="all 0.1s"
+                    _active={{
+                      transform: 'scale(0.95)'
+                    }}
+                    userSelect="none"
+                    opacity={isAutoSending ? 0.7 : 1}
+                  >
+                    {isAutoSending ? '➤ Sending...' : (isRecording ? '🎤 Recording...' : '🎤 Hold to Send')}
+                  </Button>
+                  <Button
+                    onClick={() => void handleSend()}
+                    size={sendButtonSize}
+                    minH={sendButtonMinH}
+                    flex="1"
+                    backgroundColor={darkMode ? 'blue.600' : 'blue.300'}
+                    color={darkMode ? 'white' : 'black'}
+                    disabled={!canSend || isAutoSending}
+                  >
+                    ➤ Send
+                  </Button>
                 </HStack>
               </Stack>
             ) : (
@@ -1858,50 +1931,36 @@ export default function ChatPage() {
                   >
                     Take Photo
                   </Button>
-                  {!isRecording ? (
-                    <Button
-                      onClick={() => void startRecording()}
-                      size={buttonSize}
-                      minH={buttonMinH}
-                      backgroundColor={darkMode ? 'gray.700' : 'gray.300'}
-                      color={darkMode ? 'white' : 'black'}
-                      disabled={isSending}
-                    >
-                      Start Recording
-                    </Button>
-                  ) : (
-                    <Button
-                      onClick={() => stopRecording()}
-                      size={buttonSize}
-                      minH={buttonMinH}
-                      backgroundColor={darkMode ? 'red.600' : 'red.300'}
-                      color={darkMode ? 'white' : 'black'}
-                    >
-                      Stop Recording
-                    </Button>
-                  )}
+                  <Button
+                    onMouseDown={handleRecordingStart}
+                    onTouchStart={handleRecordingStart}
+                    size={buttonSize}
+                    minH={buttonMinH}
+                    backgroundColor={isRecording ? (darkMode ? 'red.600' : 'red.400') : (darkMode ? 'gray.700' : 'gray.300')}
+                    color={isRecording ? 'white' : (darkMode ? 'white' : 'black')}
+                    disabled={isSending || isAutoSending}
+                    transform={(isRecording || isAutoSending) ? 'scale(0.95)' : 'scale(1)'}
+                    transition="all 0.1s"
+                    _active={{
+                      transform: 'scale(0.95)'
+                    }}
+                    userSelect="none"
+                    opacity={isAutoSending ? 0.7 : 1}
+                  >
+                    {isAutoSending ? 'Sending...' : (isRecording ? 'Recording... Release to send' : 'Hold to Send')}
+                  </Button>
                 </HStack>
                 <HStack gap={bottomHStackGap}>
-                  <Button
-                    onClick={() => void handleSend()}
-                    size={sendButtonSize}
-                    minH={sendButtonMinH}
-                    backgroundColor={darkMode ? 'blue.600' : 'blue.300'}
-                    color={darkMode ? 'white' : 'black'}
-                    disabled={!canSend}
-                  >
-                    Send
-                  </Button>
-                  <Button
-                    onClick={() => void handleSendVoice()}
-                    size={sendButtonSize}
-                    minH={sendButtonMinH}
-                    backgroundColor={darkMode ? 'blue.600' : 'blue.300'}
-                    color={darkMode ? 'white' : 'black'}
-                    disabled={!canSendVoice}
-                  >
-                    Send Voice
-                  </Button>
+                <Button
+                  onClick={() => void handleSend()}
+                  size={sendButtonSize}
+                  minH={sendButtonMinH}
+                  backgroundColor={darkMode ? 'blue.600' : 'blue.300'}
+                  color={darkMode ? 'white' : 'black'}
+                  disabled={!canSend || isAutoSending}
+                >
+                  Send
+                </Button>
                 </HStack>
               </HStack>
             )}
