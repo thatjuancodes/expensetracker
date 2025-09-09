@@ -57,6 +57,8 @@ function generateMessageId(): string {
 
 function MessageBubble(props: { message: ChatMessage; messageBubbleMaxW: any; messageBubbleP: any; messageBubbleFontSize: any; imageGap: any }) {
   const { message, messageBubbleMaxW, messageBubbleP, messageBubbleFontSize, imageGap } = props
+  const { resolvedTheme } = useTheme()
+  const darkMode = resolvedTheme === 'dark'
 
   const isUser = message.role === 'user'
   const { supported, speaking, speak, stop } = useSpeechSynthesis()
@@ -86,29 +88,50 @@ function MessageBubble(props: { message: ChatMessage; messageBubbleMaxW: any; me
                 img: ({ node, ...props }) => (
                   // Prevent referrer leakage and lazy-load images
                   // eslint-disable-next-line jsx-a11y/alt-text
-                  <img {...props} referrerPolicy="no-referrer" loading="lazy" />
+                  <img 
+                    {...props} 
+                    referrerPolicy="no-referrer" 
+                    loading="lazy"
+                    style={{ maxWidth: '100%', height: 'auto', borderRadius: '8px' }}
+                  />
+                ),
+                p: ({ node, ...props }) => (
+                  <p {...props} style={{ margin: '0.5em 0', lineHeight: '1.6' }} />
+                ),
+                code: ({ node, ...props }) => (
+                  <code 
+                    {...props} 
+                    style={{ 
+                      backgroundColor: darkMode ? '#2d3748' : '#f7fafc',
+                      padding: '2px 4px',
+                      borderRadius: '4px',
+                      fontSize: '0.9em'
+                    }} 
+                  />
                 ),
               }}
             >
               {message.content}
             </ReactMarkdown>
-            <Flex mt={2} justify="flex-end">
+            <Flex mt={3} justify="flex-end">
               <TooltipRoot openDelay={200} closeDelay={100} disabled={supported}>
                 <TooltipTrigger asChild>
                   <IconButton
                     aria-label={speaking ? 'Stop reading' : 'Read aloud'}
-                    size="xs"
+                    size={useBreakpointValue({ base: 'sm', md: 'xs' })}
                     variant="ghost"
-                    backgroundColor={speaking ? 'blue.500' : 'gray.300'}
-                    color={speaking ? 'white' : 'black'}
+                    backgroundColor={speaking ? 'blue.500' : (darkMode ? 'gray.700' : 'gray.300')}
+                    color={speaking ? 'white' : (darkMode ? 'white' : 'black')}
                     onClick={() => {
                       if (!supported) return
                       if (speaking) stop()
                       else speak(message.content)
                     }}
                     disabled={!supported}
+                    minH={useBreakpointValue({ base: '36px', md: '28px' })}
+                    minW={useBreakpointValue({ base: '36px', md: '28px' })}
                   >
-                    <Volume2 size={14} />
+                    <Volume2 size={useBreakpointValue({ base: 16, md: 14 })} />
                   </IconButton>
                 </TooltipTrigger>
                 <TooltipContent>Text-to-speech not supported</TooltipContent>
@@ -196,17 +219,17 @@ export default function ChatPage() {
   const isMobile = useBreakpointValue({ base: true, md: false })
   
   // Pre-compute all breakpoint values to avoid conditional hook calls
-  const messageBubbleMaxW = useBreakpointValue({ base: '95%', sm: '85%', md: '70%', lg: '60%' })
-  const messageBubbleP = useBreakpointValue({ base: 4, md: 3 })
+  const messageBubbleMaxW = useBreakpointValue({ base: '90%', sm: '85%', md: '70%', lg: '60%' })
+  const messageBubbleP = useBreakpointValue({ base: 5, md: 3 })
   const messageBubbleFontSize = useBreakpointValue({ base: 'md', md: 'sm' })
-  const imageGap = useBreakpointValue({ base: 1, md: 2 })
+  const imageGap = useBreakpointValue({ base: 2, md: 2 })
   const mobileWidth = useBreakpointValue({ base: '85%', sm: '75%' })
   const cameraP = useBreakpointValue({ base: 3, md: 4 })
   const cameraMaxW = useBreakpointValue({ base: '95%', sm: '80%', md: 'sm' })
   const headerPy = useBreakpointValue({ base: 2, md: 4 })
   const headerPx = useBreakpointValue({ base: 3, md: 6 })
-  const contentPy = useBreakpointValue({ base: 3, md: 6 })
-  const contentPx = useBreakpointValue({ base: 3, md: 6 })
+  const contentPy = useBreakpointValue({ base: 4, md: 6 })
+  const contentPx = useBreakpointValue({ base: 4, md: 6 })
   const inputContainerPy = useBreakpointValue({ base: 3, md: 4 })
   const inputContainerPx = useBreakpointValue({ base: 3, md: 6 })
   const inputGap = useBreakpointValue({ base: 1, md: 2 })
@@ -215,12 +238,12 @@ export default function ChatPage() {
   const textareaFontSize = useBreakpointValue({ base: 'md', md: 'sm' })
   const textareaMinH = useBreakpointValue({ base: '44px', md: 'auto' })
   const bottomFlexWrap = useBreakpointValue({ base: 'wrap', md: 'nowrap' })
-  const bottomGap = useBreakpointValue({ base: 2, md: 0 })
-  const bottomHStackGap = useBreakpointValue({ base: 1, md: 2 })
+  const bottomGap = useBreakpointValue({ base: 3, md: 0 })
+  const bottomHStackGap = useBreakpointValue({ base: 2, md: 2 })
   const buttonSize = useBreakpointValue({ base: 'md', md: 'sm' }) as 'xs' | 'sm' | 'md' | 'lg'
-  const buttonMinH = useBreakpointValue({ base: '44px', md: 'auto' })
+  const buttonMinH = useBreakpointValue({ base: '48px', md: 'auto' })
   const sendButtonSize = useBreakpointValue({ base: 'md', md: 'sm' }) as 'xs' | 'sm' | 'md' | 'lg'
-  const sendButtonMinH = useBreakpointValue({ base: '44px', md: 'auto' })
+  const sendButtonMinH = useBreakpointValue({ base: '48px', md: 'auto' })
   
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(false)
@@ -788,10 +811,11 @@ export default function ChatPage() {
     <Flex minH="100dvh" bg={pageBg} color={pageFg}>
       {/* Desktop collapsed sidebar button */}
       {!isMobile && sidebarCollapsed && (
-        <Box position="fixed" top={3} left={3} zIndex={20}>
+        <Box position="fixed" top={4} left={4} zIndex={20}>
           <IconButton
             aria-label="Open sidebar"
             variant="ghost"
+            size="md"
             backgroundColor={darkMode ? 'gray.700' : 'gray.300'}
             color={darkMode ? 'white' : 'black'}
             onClick={() => setSidebarCollapsed(false)}
@@ -803,15 +827,18 @@ export default function ChatPage() {
 
       {/* Mobile menu button */}
       {isMobile && (
-        <Box position="fixed" top={3} left={3} zIndex={10}>
+        <Box position="fixed" top={4} left={4} zIndex={10}>
           <IconButton
             aria-label="Open sidebar"
             variant="ghost"
+            size="lg"
             backgroundColor={darkMode ? 'black' : 'gray.300'}
             color={darkMode ? 'white' : 'black'}
             onClick={() => setSidebarOpen(true)}
+            minH="44px"
+            minW="44px"
           >
-            <MenuIcon size={18} />
+            <MenuIcon size={20} />
           </IconButton>
         </Box>
       )}
@@ -926,19 +953,29 @@ export default function ChatPage() {
       {/* Mobile sidebar overlay */}
       {isMobile && sidebarOpen && (
         <Box position="fixed" inset={0} zIndex={15}>
-          <Box position="absolute" inset={0} bg="blackAlpha.600" onClick={() => setSidebarOpen(false)} />
+          <Box 
+            position="absolute" 
+            inset={0} 
+            bg="blackAlpha.600" 
+            onClick={() => setSidebarOpen(false)}
+            backdropFilter="blur(2px)"
+          />
           <Box 
             position="absolute" 
             top={0} 
             left={0} 
             h="100%" 
             w={mobileWidth} 
-            maxW="20rem" 
+            maxW="22rem" 
             bg={darkMode ? '#1f1f1f' : '#ffffff'} 
             borderRightWidth="1px"
+            borderRightColor={borderCol}
             overflowY="hidden"
             display="flex"
             flexDirection="column"
+            shadow="2xl"
+            transform="translateX(0)"
+            transition="transform 0.3s ease"
           >
             {/* App Title and Description */}
             <Box p={3} borderBottomWidth="1px" borderColor={borderCol}>
@@ -963,13 +1000,15 @@ export default function ChatPage() {
               </IconButton>
             </HStack>
             <Box p={3} flex="1" display="flex" flexDirection="column" minH={0}>
-              <Button
-                onClick={createNewThread}
-                backgroundColor={darkMode ? 'black' : 'gray.300'}
-                color={darkMode ? 'white' : 'black'}
-                w="full"
-                mb={3}
-              >
+                <Button
+                  onClick={createNewThread}
+                  backgroundColor={darkMode ? 'gray.700' : 'gray.300'}
+                  color={darkMode ? 'white' : 'black'}
+                  w="full"
+                  mb={3}
+                  size="lg"
+                  minH="48px"
+                >
                 New chat
               </Button>
 
@@ -989,8 +1028,12 @@ export default function ChatPage() {
                         whiteSpace="nowrap"
                         flex="1"
                         minW={0}
+                        minH="44px"
                         backgroundColor={selected ? (darkMode ? '#3a3a3a' : '#eaeaea') : 'transparent'}
                         color={selected ? (darkMode ? 'white' : 'black') : pageFg}
+                        _hover={{
+                          backgroundColor: selected ? (darkMode ? '#3a3a3a' : '#eaeaea') : (darkMode ? 'gray.700' : 'gray.100')
+                        }}
                       >
                         <Text as="span" overflow="hidden" textOverflow="ellipsis" display="block" maxW="100%">
                           {t.title || 'New chat'}
@@ -1070,23 +1113,20 @@ export default function ChatPage() {
             </Flex>
           </Box>
         )}
+        {/* Header with proper mobile spacing */}
         <Box borderBottomWidth="1px" bg={pageBg}>
           <Container maxW="4xl" py={headerPy} px={headerPx}>
-                          <HStack justify="space-between" align="center">
-              <HStack gap={2}>
-                {/* Mobile menu button moved to top-left fixed position */}
+            <Box pl={isMobile ? '60px' : '0'} pr={isMobile ? '16px' : '0'}>
+              <HStack justify="center" align="center" minH={isMobile ? '60px' : 'auto'}>
+                {/* Centered content on mobile, accounting for fixed menu button */}
               </HStack>
-              
-              <HStack gap={bottomHStackGap}>
-                {/* Theme toggle moved to account menu */}
-              </HStack>
-            </HStack>
+            </Box>
           </Container>
         </Box>
 
         <Box flex="1" overflowY="auto" ref={scrollRef}>
           <Container maxW="4xl" py={contentPy} px={contentPx}>
-            <Stack gap={4}>
+            <Stack gap={useBreakpointValue({ base: 6, md: 4 })}>
               {messages.map((message) => (
                 <MessageBubble 
                   key={message.id} 
@@ -1182,89 +1222,190 @@ export default function ChatPage() {
                 minH={textareaMinH}
                 _placeholder={{ color: placeholderCol }}
                 shadow="sm"
+                _focus={{
+                  borderColor: darkMode ? 'blue.400' : 'blue.500',
+                  boxShadow: `0 0 0 1px ${darkMode ? '#63b3ed' : '#3182ce'}`
+                }}
               />
-            <HStack justify="space-between" flexWrap={bottomFlexWrap} gap={bottomGap}>
-              <HStack gap={bottomHStackGap}>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/*"
-                  multiple
-                  style={{ display: 'none' }}
-                  onChange={(e) => onSelectImages(e.currentTarget.files)}
-                />
-                <input
-                  ref={cameraInputRef}
-                  type="file"
-                  accept="image/*"
-                  capture="environment"
-                  style={{ display: 'none' }}
-                  onChange={(e) => onSelectImages(e.currentTarget.files)}
-                />
-                <Button
-                  onClick={() => fileInputRef.current?.click()}
-                  size={buttonSize}
-                  minH={buttonMinH}
-                  backgroundColor={darkMode ? 'gray.700' : 'gray.300'}
-                  color={darkMode ? 'white' : 'black'}
-                >
-                  Choose Image
-                </Button>
-                <Button
-                  onClick={() => void openCamera()}
-                  size={buttonSize}
-                  minH={buttonMinH}
-                  backgroundColor={darkMode ? 'gray.700' : 'gray.300'}
-                  color={darkMode ? 'white' : 'black'}
-                >
-                  Take Photo
-                </Button>
-                {!isRecording ? (
+            {isMobile ? (
+              <Stack gap={3}>
+                {/* Input controls row 1 */}
+                <HStack gap={bottomHStackGap} wrap="wrap">
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    style={{ display: 'none' }}
+                    onChange={(e) => onSelectImages(e.currentTarget.files)}
+                  />
+                  <input
+                    ref={cameraInputRef}
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    style={{ display: 'none' }}
+                    onChange={(e) => onSelectImages(e.currentTarget.files)}
+                  />
                   <Button
-                    onClick={() => void startRecording()}
+                    onClick={() => fileInputRef.current?.click()}
+                    size={buttonSize}
+                    minH={buttonMinH}
+                    flex="1"
+                    backgroundColor={darkMode ? 'gray.700' : 'gray.300'}
+                    color={darkMode ? 'white' : 'black'}
+                  >
+                    📁 Choose
+                  </Button>
+                  <Button
+                    onClick={() => void openCamera()}
+                    size={buttonSize}
+                    minH={buttonMinH}
+                    flex="1"
+                    backgroundColor={darkMode ? 'gray.700' : 'gray.300'}
+                    color={darkMode ? 'white' : 'black'}
+                  >
+                    📷 Photo
+                  </Button>
+                </HStack>
+                
+                {/* Input controls row 2 */}
+                <HStack gap={bottomHStackGap}>
+                  {!isRecording ? (
+                    <Button
+                      onClick={() => void startRecording()}
+                      size={buttonSize}
+                      minH={buttonMinH}
+                      flex="1"
+                      backgroundColor={darkMode ? 'gray.700' : 'gray.300'}
+                      color={darkMode ? 'white' : 'black'}
+                      disabled={isSending}
+                    >
+                      🎤 Record
+                    </Button>
+                  ) : (
+                    <Button
+                      onClick={() => stopRecording()}
+                      size={buttonSize}
+                      minH={buttonMinH}
+                      flex="1"
+                      backgroundColor={darkMode ? 'red.600' : 'red.300'}
+                      color={darkMode ? 'white' : 'black'}
+                    >
+                      ⏹️ Stop
+                    </Button>
+                  )}
+                  {audioFile ? (
+                    <Button
+                      onClick={() => void handleSendVoice()}
+                      size={sendButtonSize}
+                      minH={sendButtonMinH}
+                      flex="1"
+                      backgroundColor={darkMode ? 'blue.600' : 'blue.300'}
+                      color={darkMode ? 'white' : 'black'}
+                      disabled={!canSendVoice}
+                    >
+                      🔊 Send Voice
+                    </Button>
+                  ) : (
+                    <Button
+                      onClick={() => void handleSend()}
+                      size={sendButtonSize}
+                      minH={sendButtonMinH}
+                      flex="1"
+                      backgroundColor={darkMode ? 'blue.600' : 'blue.300'}
+                      color={darkMode ? 'white' : 'black'}
+                      disabled={!canSend}
+                    >
+                      ➤ Send
+                    </Button>
+                  )}
+                </HStack>
+              </Stack>
+            ) : (
+              <HStack justify="space-between" flexWrap={bottomFlexWrap} gap={bottomGap}>
+                <HStack gap={bottomHStackGap}>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    style={{ display: 'none' }}
+                    onChange={(e) => onSelectImages(e.currentTarget.files)}
+                  />
+                  <input
+                    ref={cameraInputRef}
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    style={{ display: 'none' }}
+                    onChange={(e) => onSelectImages(e.currentTarget.files)}
+                  />
+                  <Button
+                    onClick={() => fileInputRef.current?.click()}
                     size={buttonSize}
                     minH={buttonMinH}
                     backgroundColor={darkMode ? 'gray.700' : 'gray.300'}
                     color={darkMode ? 'white' : 'black'}
-                    disabled={isSending}
                   >
-                    Start Recording
+                    Choose Image
                   </Button>
-                ) : (
                   <Button
-                    onClick={() => stopRecording()}
+                    onClick={() => void openCamera()}
                     size={buttonSize}
                     minH={buttonMinH}
-                    backgroundColor={darkMode ? 'black' : 'gray.300'}
+                    backgroundColor={darkMode ? 'gray.700' : 'gray.300'}
                     color={darkMode ? 'white' : 'black'}
                   >
-                    Stop Recording
+                    Take Photo
                   </Button>
-                )}
+                  {!isRecording ? (
+                    <Button
+                      onClick={() => void startRecording()}
+                      size={buttonSize}
+                      minH={buttonMinH}
+                      backgroundColor={darkMode ? 'gray.700' : 'gray.300'}
+                      color={darkMode ? 'white' : 'black'}
+                      disabled={isSending}
+                    >
+                      Start Recording
+                    </Button>
+                  ) : (
+                    <Button
+                      onClick={() => stopRecording()}
+                      size={buttonSize}
+                      minH={buttonMinH}
+                      backgroundColor={darkMode ? 'red.600' : 'red.300'}
+                      color={darkMode ? 'white' : 'black'}
+                    >
+                      Stop Recording
+                    </Button>
+                  )}
+                </HStack>
+                <HStack gap={bottomHStackGap}>
+                  <Button
+                    onClick={() => void handleSend()}
+                    size={sendButtonSize}
+                    minH={sendButtonMinH}
+                    backgroundColor={darkMode ? 'blue.600' : 'blue.300'}
+                    color={darkMode ? 'white' : 'black'}
+                    disabled={!canSend}
+                  >
+                    Send
+                  </Button>
+                  <Button
+                    onClick={() => void handleSendVoice()}
+                    size={sendButtonSize}
+                    minH={sendButtonMinH}
+                    backgroundColor={darkMode ? 'blue.600' : 'blue.300'}
+                    color={darkMode ? 'white' : 'black'}
+                    disabled={!canSendVoice}
+                  >
+                    Send Voice
+                  </Button>
+                </HStack>
               </HStack>
-              <HStack gap={bottomHStackGap}>
-                <Button
-                  onClick={() => void handleSend()}
-                  size={sendButtonSize}
-                  minH={sendButtonMinH}
-                  backgroundColor={darkMode ? 'black' : 'gray.300'}
-                  color={darkMode ? 'white' : 'black'}
-                  disabled={!canSend}
-                >
-                  Send
-                </Button>
-                <Button
-                  onClick={() => void handleSendVoice()}
-                  size={sendButtonSize}
-                  minH={sendButtonMinH}
-                  backgroundColor={darkMode ? 'black' : 'gray.300'}
-                  color={darkMode ? 'white' : 'black'}
-                  disabled={!canSendVoice}
-                >
-                  Send Voice
-                </Button>
-              </HStack>
-            </HStack>
+            )}
             </Stack>
           </Container>
         </Box>
